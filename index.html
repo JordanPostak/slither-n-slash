@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SlitherHunter, a fast arcade worm game with boost controls."
+    />
+    <title>SlitherHunter</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <audio id="goodFoodSound" src="./audio/collectcoin.mp3" preload="auto"></audio>
+    <audio id="badFoodSound" src="./audio/negative.mp3" preload="auto"></audio>
+
+    <main class="game-shell">
+      <section class="game-stage" aria-label="SlitherHunter arena">
+        <canvas width="400" height="400" id="myCanvas"></canvas>
+        <button class="play-snake-game-btn" type="button">Start Game</button>
+      </section>
+
+      <aside class="snake-game-panel" aria-label="SlitherHunter game controls">
+        <h1 class="game-title">SlitherHunter</h1>
+        <div class="game-feild">
+          <h2 class="score">Score: <span id="score">0</span></h2>
+        </div>
+        <div class="high-score-feild">
+          <h2 class="high-score">High Score: <span id="high-score">0</span></h2>
+        </div>
+        <div class="boost-label">Boost</div>
+        <div class="boost-meter" aria-label="Boost meter">
+          <div id="boost-meter-fill" class="boost-meter-fill"></div>
+        </div>
+        <p class="game-note">Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Longer snakes get a little more boost time. Down/S brakes. Phones can steer by dragging.</p>
+      </aside>
+    </main>
+
+    <script src="./src/main.js" defer></script>
+  </body>
+</html>
+
