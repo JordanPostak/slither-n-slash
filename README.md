@@ -1,4 +1,4 @@
-# SlitherHunter
+# Slither N' Slash
 
 A standalone browser worm game with gradual turning, moving food targets, and a rechargeable boost bar.
 
