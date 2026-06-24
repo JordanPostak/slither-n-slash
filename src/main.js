@@ -33,6 +33,13 @@ var playing = false
 var wormHeadImage = new Image()
 var wormBodyImage = new Image()
 var controlsReady = false
+var mobileControls = {
+  left: false,
+  right: false,
+  boost: false,
+  slow: false,
+}
+var renderScale = 1
 
 wormHeadImage.src = './assets/snake_head.png'
 wormBodyImage.src = './assets/snake_body.png'
@@ -67,8 +74,10 @@ playSnakeGameBtn.addEventListener('click', function () {
 
 function resizeCanvas() {
   var rect = gameStage.getBoundingClientRect()
-  canvas.width = Math.max(320, Math.floor(rect.width))
-  canvas.height = Math.max(320, Math.floor(rect.height))
+  canvas.width = Math.max(getCanvasMinSide(), Math.floor(rect.width))
+  canvas.height = Math.max(getCanvasMinSide(), Math.floor(rect.height))
+  renderScale = getRenderScale()
+  segLength = 10 * renderScale
 }
 
 function init() {
@@ -103,6 +112,8 @@ function init() {
 }
 
 function setupControls() {
+  setupMobileControlButtons()
+
   window.addEventListener('keydown', function (evt) {
     if (evt.key === 'Shift' || evt.key === ' ') {
       evt.preventDefault()
@@ -130,44 +141,57 @@ function setupControls() {
     braking = false
   })
 
-  window.addEventListener('pointerdown', function (evt) {
-    if (evt.target === canvas && evt.pointerType !== 'mouse') {
-      steerTarget = getPointerPos(canvas, evt.clientX, evt.clientY)
-      touchBoosting = true
-    }
+  window.addEventListener('blur', function () {
+    releaseMobileControls()
   })
+}
 
-  window.addEventListener('pointerup', function () {
-    touchBoosting = false
-  })
+function setupMobileControlButtons() {
+  var controlButtons = document.querySelectorAll('[data-touch-control]')
 
-  window.addEventListener('pointercancel', function () {
-    touchBoosting = false
-  })
+  for (var i = 0; i < controlButtons.length; i++) {
+    addMobileControlButton(controlButtons[i])
+  }
+}
 
-  window.addEventListener('pointermove', function (evt) {
-    if (evt.pointerType !== 'mouse' && evt.buttons > 0) {
-      steerTarget = getPointerPos(canvas, evt.clientX, evt.clientY)
-      touchBoosting = true
-    }
-  })
+function addMobileControlButton(button) {
+  var controlName = button.getAttribute('data-touch-control')
 
-  window.addEventListener('touchmove', function (evt) {
-    var touch = evt.touches[0]
-    if (!touch) return
-
+  button.addEventListener('pointerdown', function (evt) {
     evt.preventDefault()
-    steerTarget = getPointerPos(canvas, touch.clientX, touch.clientY)
-    touchBoosting = true
-  }, { passive: false })
-
-  window.addEventListener('touchend', function () {
-    touchBoosting = false
+    button.setPointerCapture(evt.pointerId)
+    setMobileControl(controlName, true)
   })
 
-  window.addEventListener('touchcancel', function () {
-    touchBoosting = false
+  button.addEventListener('pointerup', function (evt) {
+    evt.preventDefault()
+    setMobileControl(controlName, false)
   })
+
+  button.addEventListener('pointercancel', function () {
+    setMobileControl(controlName, false)
+  })
+
+  button.addEventListener('lostpointercapture', function () {
+    setMobileControl(controlName, false)
+  })
+}
+
+function setMobileControl(controlName, isActive) {
+  if (!Object.prototype.hasOwnProperty.call(mobileControls, controlName)) return
+
+  mobileControls[controlName] = isActive
+  if (isActive && (controlName === 'left' || controlName === 'right')) {
+    steerTarget = undefined
+  }
+}
+
+function releaseMobileControls() {
+  mobileControls.left = false
+  mobileControls.right = false
+  mobileControls.boost = false
+  mobileControls.slow = false
+  touchBoosting = false
 }
 
 function isMovementKey(key) {
@@ -190,10 +214,11 @@ function isMovementKey(key) {
 function generateFood() {
   var velocity = getRandomFoodVelocity()
   var isBad = Math.random() < 0.38
+  var foodMargin = 20 * renderScale
 
   return {
-    x: 10 + Math.random() * (canvas.width - 20),
-    y: 10 + Math.random() * (canvas.height - 20),
+    x: foodMargin / 2 + Math.random() * (canvas.width - foodMargin),
+    y: foodMargin / 2 + Math.random() * (canvas.height - foodMargin),
     dx: velocity.dx,
     dy: velocity.dy,
     facingAngle: Math.atan2(velocity.dy, velocity.dx),
@@ -263,10 +288,10 @@ function animate() {
 
       for (var i = 0; i < foods.length; i++) {
         if (
-          snakeHead.x > foods[i].x - 1 &&
-          snakeHead.x < foods[i].x + 18 &&
-          snakeHead.y > foods[i].y - 1 &&
-          snakeHead.y < foods[i].y + 18
+          snakeHead.x > foods[i].x - renderScale &&
+          snakeHead.x < foods[i].x + 18 * renderScale &&
+          snakeHead.y > foods[i].y - renderScale &&
+          snakeHead.y < foods[i].y + 18 * renderScale
         ) {
           if (foods[i].isBad) {
             n = 3
@@ -304,9 +329,9 @@ function animate() {
 
 function drawFood(food) {
   if (food.isBad) {
-    drawBadFood(food.x + 6, food.y + 5)
+    drawBadFood(food.x + 6 * renderScale, food.y + 5 * renderScale)
   } else {
-    drawGoodFood(food.x + 6, food.y + 5, food.facingAngle)
+    drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
   }
 }
 
@@ -314,6 +339,7 @@ function drawGoodFood(centerX, centerY, angle) {
   ctx.save()
   ctx.translate(centerX, centerY)
   ctx.rotate(angle)
+  ctx.scale(renderScale, renderScale)
 
   ctx.fillStyle = 'rgba(232, 209, 184, 0.18)'
   ctx.beginPath()
@@ -378,6 +404,7 @@ function drawGoodFood(centerX, centerY, angle) {
 function drawBadFood(centerX, centerY) {
   ctx.save()
   ctx.translate(centerX, centerY)
+  ctx.scale(renderScale, renderScale)
 
   ctx.fillStyle = 'rgba(120, 255, 86, 0.14)'
   ctx.beginPath()
@@ -433,7 +460,7 @@ function moveSnakeHead() {
     headingAngle = turnTowardAngle(headingAngle, targetAngle, 0.12)
   }
 
-  var currentSpeed = snakeSpeed
+  var currentSpeed = snakeSpeed * (0.84 + renderScale * 0.16)
   if (boosting) currentSpeed *= boostMultiplier
   if (braking) currentSpeed *= 0.48
 
@@ -462,9 +489,9 @@ function moveSnakeHead() {
 }
 
 function applyKeyboardControls() {
-  var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
-  var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
-  var brakingBackward = pressedKeys.ArrowDown || pressedKeys.s || pressedKeys.S
+  var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A || mobileControls.left
+  var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D || mobileControls.right
+  var brakingBackward = pressedKeys.ArrowDown || pressedKeys.s || pressedKeys.S || mobileControls.slow
 
   if (turningLeft && !turningRight) {
     headingAngle -= turnRate
@@ -522,7 +549,8 @@ function isBoostControlActive() {
     pressedKeys.ArrowUp ||
     pressedKeys.w ||
     pressedKeys.W ||
-    touchBoosting
+    touchBoosting ||
+    mobileControls.boost
   )
 }
 
@@ -530,6 +558,7 @@ function resetBoost() {
   boostCoolingDown = false
   boostEnergy = getBoostDuration()
   touchBoosting = false
+  releaseMobileControls()
   lastBoostUpdateAt = Date.now()
   setBoosting(false)
   updateBoostMeterStatus()
@@ -628,8 +657,8 @@ function dragSegment(i, xin, yin) {
 
   var segmentImage = i === 0 ? wormHeadImage : wormBodyImage
   var imageReady = segmentImage.complete && segmentImage.naturalWidth > 0
-  var segmentWidth = i === 0 ? 28 : 24
-  var segmentHeight = i === 0 ? 46 : 34
+  var segmentWidth = (i === 0 ? 28 : 24) * renderScale
+  var segmentHeight = (i === 0 ? 46 : 34) * renderScale
 
   if (imageReady) {
     ctx.drawImage(
@@ -696,16 +725,18 @@ function foodRandom() {
     foods[i].x += foods[i].dx
     foods[i].y += foods[i].dy
 
-    if (foods[i].x < 0 || foods[i].x > canvas.width - 13) {
+    var foodEdgeSize = 13 * renderScale
+
+    if (foods[i].x < 0 || foods[i].x > canvas.width - foodEdgeSize) {
       foods[i].dx *= -1
       foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
-      foods[i].x = Math.max(0, Math.min(canvas.width - 13, foods[i].x))
+      foods[i].x = Math.max(0, Math.min(canvas.width - foodEdgeSize, foods[i].x))
     }
 
-    if (foods[i].y < 0 || foods[i].y > canvas.height - 13) {
+    if (foods[i].y < 0 || foods[i].y > canvas.height - foodEdgeSize) {
       foods[i].dy *= -1
       foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
-      foods[i].y = Math.max(0, Math.min(canvas.height - 13, foods[i].y))
+      foods[i].y = Math.max(0, Math.min(canvas.height - foodEdgeSize, foods[i].y))
     }
 
   }
@@ -721,7 +752,9 @@ function updateMouseMovement(food) {
 
   food.lastMouseUpdateAt = now
 
-  if (distanceFromSnake < mouseFleeRadius && food.fleeEnergy > 0) {
+  var fleeRadius = mouseFleeRadius * renderScale
+
+  if (distanceFromSnake < fleeRadius && food.fleeEnergy > 0) {
     food.fleeEnergy = Math.max(0, food.fleeEnergy - elapsed)
 
     var fleeX = dxFromSnake
@@ -736,7 +769,7 @@ function updateMouseMovement(food) {
     }
 
     var fleeAngle = Math.atan2(fleeY, fleeX)
-    var panic = 1 - distanceFromSnake / mouseFleeRadius
+    var panic = 1 - distanceFromSnake / fleeRadius
     var staminaScale = 0.55 + 0.45 * (food.fleeEnergy / mouseFleeStamina)
     var speed = (mouseFleeSpeed + panic * 0.6) * staminaScale
 
@@ -782,22 +815,33 @@ function getEdgeAvoidanceVector(food) {
   var xForce = 0
   var yForce = 0
 
-  if (food.x < mouseEdgeAvoidance) {
-    xForce += (mouseEdgeAvoidance - food.x) / mouseEdgeAvoidance
-  } else if (food.x > canvas.width - mouseEdgeAvoidance) {
-    xForce -= (food.x - (canvas.width - mouseEdgeAvoidance)) / mouseEdgeAvoidance
+  var edgeAvoidance = mouseEdgeAvoidance * renderScale
+
+  if (food.x < edgeAvoidance) {
+    xForce += (edgeAvoidance - food.x) / edgeAvoidance
+  } else if (food.x > canvas.width - edgeAvoidance) {
+    xForce -= (food.x - (canvas.width - edgeAvoidance)) / edgeAvoidance
   }
 
-  if (food.y < mouseEdgeAvoidance) {
-    yForce += (mouseEdgeAvoidance - food.y) / mouseEdgeAvoidance
-  } else if (food.y > canvas.height - mouseEdgeAvoidance) {
-    yForce -= (food.y - (canvas.height - mouseEdgeAvoidance)) / mouseEdgeAvoidance
+  if (food.y < edgeAvoidance) {
+    yForce += (edgeAvoidance - food.y) / edgeAvoidance
+  } else if (food.y > canvas.height - edgeAvoidance) {
+    yForce -= (food.y - (canvas.height - edgeAvoidance)) / edgeAvoidance
   }
 
   return {
     x: xForce,
     y: yForce,
   }
+}
+
+function getCanvasMinSide() {
+  return window.matchMedia('(max-width: 820px)').matches ? 180 : 320
+}
+
+function getRenderScale() {
+  var shortestSide = Math.min(canvas.width, canvas.height)
+  return Math.max(0.68, Math.min(1, shortestSide / 520))
 }
 
 function drawLine(x1, y1, x2, y2, color, width) {

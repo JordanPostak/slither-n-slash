@@ -15,10 +15,20 @@
     <audio id="badFoodSound" src="./audio/negative.mp3" preload="auto"></audio>
 
     <main class="game-shell">
+      <div class="mobile-control-bar mobile-action-controls" aria-label="Speed controls">
+        <button class="touch-control-btn" data-touch-control="boost" type="button">Boost</button>
+        <button class="touch-control-btn" data-touch-control="slow" type="button">Slow</button>
+      </div>
+
       <section class="game-stage" aria-label="Slither N' Slash arena">
         <canvas width="400" height="400" id="myCanvas"></canvas>
         <button class="play-snake-game-btn" type="button">Start Game</button>
       </section>
+
+      <div class="mobile-control-bar mobile-direction-controls" aria-label="Direction controls">
+        <button class="touch-control-btn" data-touch-control="left" type="button">Left</button>
+        <button class="touch-control-btn" data-touch-control="right" type="button">Right</button>
+      </div>
 
       <aside class="snake-game-panel" aria-label="Slither N' Slash game controls">
         <h1 class="game-title">Slither N' Slash</h1>
@@ -32,7 +42,7 @@
         <div class="boost-meter" aria-label="Boost meter">
           <div id="boost-meter-fill" class="boost-meter-fill"></div>
         </div>
-        <p class="game-note">Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Longer snakes get a little more boost time. Down/S brakes. Phones can steer by dragging.</p>
+        <p class="game-note">Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Longer snakes get a little more boost time. Down/S brakes.</p>
       </aside>
     </main>
 
