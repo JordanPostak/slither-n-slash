@@ -420,6 +420,24 @@ button {
     border-radius: 10px 28px 10px 10px;
   }
 
+  .boost-control-box .boost-control-gauge {
+    --boost-progress: 100% !important;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255, 247, 220, 0.92) 0 18%, rgba(255, 116, 35, 0.72) 19% 28%, transparent 29%),
+      radial-gradient(circle at 50% 50%, rgba(255, 116, 35, 0.32), rgba(255, 116, 35, 0.08) 46%, rgba(255, 255, 255, 0.12) 47% 50%, transparent 51%);
+  }
+
+  .boost-control-box.is-pressed {
+    border-color: rgba(255, 141, 51, 0.92);
+    box-shadow:
+      inset 0 0 32px rgba(255, 116, 35, 0.26),
+      0 0 24px rgba(255, 116, 35, 0.36);
+  }
+
+  .boost-control-box.is-pressed .boost-control-gauge {
+    transform: scale(0.94);
+  }
+
   .joystick-control-box {
     grid-column: 2;
     justify-self: end;
@@ -505,8 +523,8 @@ button {
 
   .boost-control-box.is-cooling .boost-control-gauge {
     background:
-      radial-gradient(circle at 50% 50%, rgba(255, 247, 220, 0.7) 0 18%, rgba(67, 190, 255, 0.68) 19% 28%, transparent 29%),
-      conic-gradient(rgb(67, 190, 255) var(--boost-progress), rgba(255, 255, 255, 0.12) 0);
+      radial-gradient(circle at 50% 50%, rgba(255, 247, 220, 0.7) 0 18%, rgba(67, 190, 255, 0.6) 19% 28%, transparent 29%),
+      radial-gradient(circle at 50% 50%, rgba(67, 190, 255, 0.22), rgba(67, 190, 255, 0.06) 46%, rgba(255, 255, 255, 0.1) 47% 50%, transparent 51%);
     box-shadow: 0 0 18px rgba(67, 190, 255, 0.28);
   }
 

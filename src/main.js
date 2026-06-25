@@ -12,6 +12,7 @@ var fireballSpawnMinDelay = 55000
 var fireballSpawnMaxDelay = 85000
 var fireballMinBeetles = 5
 var beetleBurnDuration = 1400
+var swallowRadius = 24
 var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var steerTarget
@@ -65,6 +66,12 @@ var joystickOrigin
 var joystickHandle
 var boostControlGauges = []
 var boostVisualStates = []
+var boostMeterFill
+var lastBoostVisualUpdateAt = 0
+var lastBoostVisualProgress = -1
+var lastBoostVisualState = ''
+var boostVisualUpdateInterval = 100
+var mobileControlMediaQuery
 
 wormHeadImage.src = './assets/snake_head.png'
 wormBodyImage.src = './assets/snake_body.png'
@@ -106,6 +113,7 @@ function resizeCanvas() {
   segLength = 10 * renderScale
   arenaCornerRadius = getArenaCornerRadius()
   snakeBodyBounceRadius = 18 * renderScale
+  swallowRadius = 24 * renderScale
   gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius + 'px')
 }
 
@@ -195,98 +203,141 @@ function setupTouchJoystick() {
   boostBox = document.querySelector('[data-mobile-control="boost"]')
   joystickOrigin = document.getElementById('joystick-origin')
   joystickHandle = document.getElementById('joystick-handle')
+  boostMeterFill = document.getElementById('boost-meter-fill')
   boostControlGauges = document.querySelectorAll('.boost-control-gauge')
   boostVisualStates = document.querySelectorAll('.boost-visual-state')
 
   if (joystickBox) {
     joystickBox.addEventListener('pointerdown', handleJoystickPointerDown)
     joystickBox.addEventListener('pointermove', handleJoystickPointerMove)
-    joystickBox.addEventListener('pointerup', handleJoystickPointerUp)
-    joystickBox.addEventListener('pointercancel', handleJoystickPointerUp)
-    joystickBox.addEventListener('lostpointercapture', handleJoystickPointerUp)
   }
 
   if (boostBox) {
     boostBox.addEventListener('pointerdown', handleBoostPointerDown)
-    boostBox.addEventListener('pointerup', handleBoostPointerUp)
-    boostBox.addEventListener('pointercancel', handleBoostPointerUp)
-    boostBox.addEventListener('lostpointercapture', handleBoostPointerUp)
   }
+
+  document.addEventListener('pointermove', handleActiveTouchPointerMove)
+  document.addEventListener('pointerup', handleActiveTouchPointerUp)
+  document.addEventListener('pointercancel', handleActiveTouchPointerUp)
 }
 
 function handleJoystickPointerDown(evt) {
-  if (joystickActive) return
+  if (evt.pointerType === 'mouse' || joystickActive) return
 
   evt.preventDefault()
+  evt.stopPropagation()
   joystickActive = true
   joystickTouchId = evt.pointerId
   joystickCurrentX = evt.clientX
   joystickCurrentY = evt.clientY
-  evt.currentTarget.setPointerCapture(evt.pointerId)
+  capturePointer(evt.currentTarget, evt.pointerId)
   steerTarget = undefined
+  updateJoystickTargetFromPointer(evt.clientX, evt.clientY)
   updateJoystickVisual()
 }
 
 function handleJoystickPointerMove(evt) {
-  if (evt.pointerId === joystickTouchId && joystickActive) {
-    evt.preventDefault()
-    joystickCurrentX = evt.clientX
-    joystickCurrentY = evt.clientY
-    var joystickRect = joystickBox.getBoundingClientRect()
-    
-    // Calculate distance from start
-    var deltaX = joystickCurrentX - (joystickRect.left + joystickRect.width / 2)
-    var deltaY = joystickCurrentY - (joystickRect.top + joystickRect.height / 2)
-    var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-    
-    // Only apply steering if beyond deadzone
-    if (distance > joystickDeadzone) {
-      steerAngleTarget = Math.atan2(deltaY, deltaX)
-    }
+  if (evt.pointerId !== joystickTouchId || !joystickActive) return
 
-    updateJoystickVisual()
-  }
+  evt.preventDefault()
+  evt.stopPropagation()
+  updateJoystickTargetFromPointer(evt.clientX, evt.clientY)
 }
 
 function handleJoystickPointerUp(evt) {
-  if (evt.pointerId === joystickTouchId) {
-    joystickActive = false
-    joystickTouchId = null
-    steerAngleTarget = undefined
-    updateJoystickVisual()
-  }
+  if (evt.pointerId !== joystickTouchId) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  releaseJoystickControl()
 }
 
 function handleBoostPointerDown(evt) {
-  if (boostTouchActive) return
+  if (evt.pointerType === 'mouse' || boostTouchActive) return
 
   evt.preventDefault()
+  evt.stopPropagation()
   boostTouchActive = true
   boostTouchId = evt.pointerId
-  evt.currentTarget.setPointerCapture(evt.pointerId)
-  updateBoostMeterStatus()
+  boostBox.classList.add('is-pressed')
+  capturePointer(evt.currentTarget, evt.pointerId)
+  updateBoostMeterStatus(true)
 }
 
 function handleBoostPointerUp(evt) {
-  if (evt.pointerId === boostTouchId) {
-    boostTouchActive = false
-    boostTouchId = null
-    updateBoostMeterStatus()
+  if (evt.pointerId !== boostTouchId) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  releaseBoostControl()
+}
+
+function handleActiveTouchPointerMove(evt) {
+  if (evt.pointerId === joystickTouchId) {
+    handleJoystickPointerMove(evt)
   }
 }
 
-function releaseMobileControls() {
+function handleActiveTouchPointerUp(evt) {
+  if (evt.pointerId === joystickTouchId) {
+    handleJoystickPointerUp(evt)
+  }
+
+  if (evt.pointerId === boostTouchId) {
+    handleBoostPointerUp(evt)
+  }
+}
+
+function updateJoystickTargetFromPointer(clientX, clientY) {
+  joystickCurrentX = clientX
+  joystickCurrentY = clientY
+
+  var joystickRect = joystickBox.getBoundingClientRect()
+  var deltaX = joystickCurrentX - (joystickRect.left + joystickRect.width / 2)
+  var deltaY = joystickCurrentY - (joystickRect.top + joystickRect.height / 2)
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+  if (distance > joystickDeadzone) {
+    steerAngleTarget = Math.atan2(deltaY, deltaX)
+  } else {
+    steerAngleTarget = undefined
+  }
+
+  updateJoystickVisual()
+}
+
+function releaseJoystickControl() {
   joystickActive = false
   joystickTouchId = null
+  steerAngleTarget = undefined
+  updateJoystickVisual()
+}
+
+function releaseBoostControl() {
   boostTouchActive = false
   boostTouchId = null
+  if (boostBox) {
+    boostBox.classList.remove('is-pressed')
+  }
+  updateBoostMeterStatus(true)
+}
+
+function capturePointer(element, pointerId) {
+  if (!element || !element.setPointerCapture) return
+
+  try {
+    element.setPointerCapture(pointerId)
+  } catch {}
+}
+
+function releaseMobileControls() {
+  releaseJoystickControl()
+  releaseBoostControl()
   mobileControls.left = false
   mobileControls.right = false
   mobileControls.boost = false
   touchBoosting = false
   steerAngleTarget = undefined
-  updateJoystickVisual()
-  updateBoostMeterStatus()
 }
 
 function updateJoystickVisual() {
@@ -418,12 +469,7 @@ function animate() {
       moveSnakeHead()
 
       for (var i = 0; i < foods.length; i++) {
-        if (
-          snakeHead.x > foods[i].x - renderScale &&
-          snakeHead.x < foods[i].x + 18 * renderScale &&
-          snakeHead.y > foods[i].y - renderScale &&
-          snakeHead.y < foods[i].y + 18 * renderScale
-        ) {
+        if (isSnakeTouchingEntity(foods[i], swallowRadius)) {
           if (foods[i].isBurning) {
             drawFood(foods[i])
             continue
@@ -897,18 +943,18 @@ function resetBoost() {
   releaseMobileControls()
   lastBoostUpdateAt = Date.now()
   setBoosting(false)
-  updateBoostMeterStatus()
+  updateBoostMeterStatus(true)
 }
 
 function setBoosting(nextBoosting) {
+  if (boosting === nextBoosting) return
+
   boosting = nextBoosting
   document.body.classList.toggle('is-boosting', boosting)
-  updateBoostMeterStatus()
+  updateBoostMeterStatus(true)
 }
 
-function updateBoostMeterStatus() {
-  var boostMeterFill = document.getElementById('boost-meter-fill')
-
+function updateBoostMeterStatus(forceUpdate) {
   var maxEnergy = getBoostDuration()
   var boostProgress = boostEnergy / maxEnergy
   var boostHeld = isBoostControlActive()
@@ -916,47 +962,85 @@ function updateBoostMeterStatus() {
 
   if (boosting) {
     boostState = 'active'
-    updateBoostMeter(boostMeterFill, boostProgress, boostState)
-    updateBoostControlVisual(boostProgress, boostState)
+    updateBoostMeter(boostMeterFill, boostProgress, boostState, forceUpdate)
+    updateBoostControlVisual(boostProgress, boostState, forceUpdate)
     return
   }
 
   if (boostHeld && boostEnergy <= 0) {
     boostState = 'cooldown'
-    updateBoostMeter(boostMeterFill, 0, boostState)
-    updateBoostControlVisual(0, boostState)
+    updateBoostMeter(boostMeterFill, 0, boostState, forceUpdate)
+    updateBoostControlVisual(0, boostState, forceUpdate)
     return
   }
 
   if (boostCoolingDown) {
     boostState = 'cooldown'
-    updateBoostMeter(boostMeterFill, boostProgress, boostState)
-    updateBoostControlVisual(boostProgress, boostState)
+    updateBoostMeter(boostMeterFill, boostProgress, boostState, forceUpdate)
+    updateBoostControlVisual(boostProgress, boostState, forceUpdate)
     return
   }
 
-  updateBoostMeter(boostMeterFill, 1, boostState)
-  updateBoostControlVisual(1, boostState)
+  updateBoostMeter(boostMeterFill, 1, boostState, forceUpdate)
+  updateBoostControlVisual(1, boostState, forceUpdate)
 }
 
-function updateBoostMeter(meterFill, progress, state) {
+function updateBoostMeter(meterFill, progress, state, forceUpdate) {
   if (!meterFill) return
+  if (isMobileControlLayout()) return
+  if (!forceUpdate && !shouldUpdateBoostVisual(progress, state)) return
 
   meterFill.style.width = Math.max(0, Math.min(1, progress)) * 100 + '%'
   meterFill.className = 'boost-meter-fill ' + state
 }
 
-function updateBoostControlVisual(progress, state) {
+function updateBoostControlVisual(progress, state, forceUpdate) {
   var clampedProgress = Math.max(0, Math.min(1, progress))
+  var quantizedProgress = Math.round(clampedProgress * 20) / 20
+
+  if (isMobileControlLayout()) {
+    if (!forceUpdate && state === lastBoostVisualState) return
+
+    lastBoostVisualState = state
+
+    for (var mobileStateIndex = 0; mobileStateIndex < boostVisualStates.length; mobileStateIndex++) {
+      boostVisualStates[mobileStateIndex].classList.toggle('is-active', state === 'active')
+      boostVisualStates[mobileStateIndex].classList.toggle('is-cooling', state === 'cooldown')
+    }
+
+    return
+  }
+
+  if (!forceUpdate && !shouldUpdateBoostVisual(quantizedProgress, state)) return
+
+  lastBoostVisualUpdateAt = Date.now()
+  lastBoostVisualProgress = quantizedProgress
+  lastBoostVisualState = state
 
   for (var i = 0; i < boostControlGauges.length; i++) {
-    boostControlGauges[i].style.setProperty('--boost-progress', clampedProgress * 100 + '%')
+    boostControlGauges[i].style.setProperty('--boost-progress', quantizedProgress * 100 + '%')
   }
 
   for (var j = 0; j < boostVisualStates.length; j++) {
     boostVisualStates[j].classList.toggle('is-active', state === 'active')
     boostVisualStates[j].classList.toggle('is-cooling', state === 'cooldown')
   }
+}
+
+function shouldUpdateBoostVisual(progress, state) {
+  var now = Date.now()
+
+  if (state !== lastBoostVisualState) return true
+  if (Math.abs(progress - lastBoostVisualProgress) >= 0.05) return true
+  return now - lastBoostVisualUpdateAt >= boostVisualUpdateInterval
+}
+
+function isMobileControlLayout() {
+  if (!mobileControlMediaQuery) {
+    mobileControlMediaQuery = window.matchMedia('(max-width: 820px), (max-width: 1024px) and (max-height: 540px) and (orientation: landscape)')
+  }
+
+  return mobileControlMediaQuery.matches
 }
 
 function turnTowardAngle(current, target, amount) {
@@ -1275,7 +1359,7 @@ function applyRoundedArenaBounds(entity, padding) {
 }
 
 function applyRoundedSnakeBounds() {
-  var correction = getRoundedArenaCorrection(snakeHead.x, snakeHead.y, segLength * 1.8)
+  var correction = getRoundedArenaCorrection(snakeHead.x, snakeHead.y, 0)
   if (!correction) return
 
   snakeHead.x = correction.x
