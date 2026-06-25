@@ -41,6 +41,17 @@ var mobileControls = {
 }
 var renderScale = 1
 
+// Mobile joystick controls
+var joystickActive = false
+var joystickTouchId = null
+var joystickStartX = 0
+var joystickStartY = 0
+var joystickCurrentX = 0
+var joystickCurrentY = 0
+var boostTouchActive = false
+var boostTouchId = null
+var joystickDeadzone = 10 // minimum movement before joystick activates
+
 wormHeadImage.src = './assets/snake_head.png'
 wormBodyImage.src = './assets/snake_body.png'
 
@@ -112,7 +123,7 @@ function init() {
 }
 
 function setupControls() {
-  setupMobileControlButtons()
+  setupTouchJoystick()
 
   window.addEventListener('keydown', function (evt) {
     if (evt.key === 'Shift' || evt.key === ' ') {
@@ -146,47 +157,72 @@ function setupControls() {
   })
 }
 
-function setupMobileControlButtons() {
-  var controlButtons = document.querySelectorAll('[data-touch-control]')
-
-  for (var i = 0; i < controlButtons.length; i++) {
-    addMobileControlButton(controlButtons[i])
-  }
+function setupTouchJoystick() {
+  document.addEventListener('pointerdown', handleJoystickPointerDown)
+  document.addEventListener('pointermove', handleJoystickPointerMove)
+  document.addEventListener('pointerup', handleJoystickPointerUp)
+  document.addEventListener('pointercancel', handleJoystickPointerUp)
 }
 
-function addMobileControlButton(button) {
-  var controlName = button.getAttribute('data-touch-control')
-
-  button.addEventListener('pointerdown', function (evt) {
-    evt.preventDefault()
-    button.setPointerCapture(evt.pointerId)
-    setMobileControl(controlName, true)
-  })
-
-  button.addEventListener('pointerup', function (evt) {
-    evt.preventDefault()
-    setMobileControl(controlName, false)
-  })
-
-  button.addEventListener('pointercancel', function () {
-    setMobileControl(controlName, false)
-  })
-
-  button.addEventListener('lostpointercapture', function () {
-    setMobileControl(controlName, false)
-  })
-}
-
-function setMobileControl(controlName, isActive) {
-  if (!Object.prototype.hasOwnProperty.call(mobileControls, controlName)) return
-
-  mobileControls[controlName] = isActive
-  if (isActive && (controlName === 'left' || controlName === 'right')) {
+function handleJoystickPointerDown(evt) {
+  // Get canvas center to determine left/right zones
+  var canvasRect = canvas.getBoundingClientRect()
+  var canvasCenter = canvasRect.left + canvasRect.width / 2
+  var isLeftZone = evt.clientX < canvasCenter
+  
+  if (isLeftZone && !boostTouchActive) {
+    // Left zone: boost button
+    boostTouchActive = true
+    boostTouchId = evt.pointerId
+    document.setPointerCapture(evt.pointerId)
+  } else if (!isLeftZone && !joystickActive) {
+    // Right zone: joystick
+    joystickActive = true
+    joystickTouchId = evt.pointerId
+    joystickStartX = evt.clientX
+    joystickStartY = evt.clientY
+    joystickCurrentX = evt.clientX
+    joystickCurrentY = evt.clientY
+    document.setPointerCapture(evt.pointerId)
     steerTarget = undefined
   }
 }
 
+function handleJoystickPointerMove(evt) {
+  if (evt.pointerId === joystickTouchId && joystickActive) {
+    joystickCurrentX = evt.clientX
+    joystickCurrentY = evt.clientY
+    
+    // Calculate distance from start
+    var deltaX = joystickCurrentX - joystickStartX
+    var deltaY = joystickCurrentY - joystickStartY
+    var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+    
+    // Only apply steering if beyond deadzone
+    if (distance > joystickDeadzone) {
+      var angle = Math.atan2(deltaY, deltaX)
+      headingAngle = angle
+    }
+  }
+}
+
+function handleJoystickPointerUp(evt) {
+  if (evt.pointerId === joystickTouchId) {
+    joystickActive = false
+    joystickTouchId = null
+  }
+  
+  if (evt.pointerId === boostTouchId) {
+    boostTouchActive = false
+    boostTouchId = null
+  }
+}
+
 function releaseMobileControls() {
+  joystickActive = false
+  joystickTouchId = null
+  boostTouchActive = false
+  boostTouchId = null
   mobileControls.left = false
   mobileControls.right = false
   mobileControls.boost = false
@@ -489,9 +525,9 @@ function moveSnakeHead() {
 }
 
 function applyKeyboardControls() {
-  var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A || mobileControls.left
-  var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D || mobileControls.right
-  var brakingBackward = pressedKeys.ArrowDown || pressedKeys.s || pressedKeys.S || mobileControls.slow
+  var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
+  var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
+  var brakingBackward = pressedKeys.ArrowDown || pressedKeys.s || pressedKeys.S
 
   if (turningLeft && !turningRight) {
     headingAngle -= turnRate
@@ -550,6 +586,7 @@ function isBoostControlActive() {
     pressedKeys.w ||
     pressedKeys.W ||
     touchBoosting ||
+    boostTouchActive ||
     mobileControls.boost
   )
 }

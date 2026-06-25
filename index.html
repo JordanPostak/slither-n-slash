@@ -15,7 +15,7 @@
     <audio id="badFoodSound" src="./audio/negative.mp3" preload="auto"></audio>
 
     <main class="game-shell">
-      <div class="mobile-control-bar mobile-action-controls" aria-label="Speed controls">
+      <div class="mobile-control-bar mobile-action-controls" aria-label="Speed controls" style="display: none;">
         <button class="touch-control-btn" data-touch-control="boost" type="button">Boost</button>
         <button class="touch-control-btn" data-touch-control="slow" type="button">Slow</button>
       </div>
@@ -25,7 +25,7 @@
         <button class="play-snake-game-btn" type="button">Start Game</button>
       </section>
 
-      <div class="mobile-control-bar mobile-direction-controls" aria-label="Direction controls">
+      <div class="mobile-control-bar mobile-direction-controls" aria-label="Direction controls" style="display: none;">
         <button class="touch-control-btn" data-touch-control="left" type="button">Left</button>
         <button class="touch-control-btn" data-touch-control="right" type="button">Right</button>
       </div>
@@ -42,7 +42,11 @@
         <div class="boost-meter" aria-label="Boost meter">
           <div id="boost-meter-fill" class="boost-meter-fill"></div>
         </div>
-        <p class="game-note">Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Longer snakes get a little more boost time. Down/S brakes.</p>
+        <p class="game-note">
+          <strong>Desktop:</strong> Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Down/S brakes.
+          <br/>
+          <strong>Mobile:</strong> Touch and drag on the right side to steer (joystick). Touch the left side to boost.
+        </p>
       </aside>
     </main>
 
