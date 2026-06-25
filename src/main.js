@@ -85,10 +85,22 @@ playSnakeGameBtn.addEventListener('click', function () {
 
 function resizeCanvas() {
   var rect = gameStage.getBoundingClientRect()
-  canvas.width = Math.max(getCanvasMinSide(), Math.floor(rect.width))
-  canvas.height = Math.max(getCanvasMinSide(), Math.floor(rect.height))
+  var side = Math.max(getCanvasMinSide(), Math.floor(Math.min(rect.width * 0.72, rect.height)))
+  canvas.width = side
+  canvas.height = side
   renderScale = getRenderScale()
   segLength = 10 * renderScale
+  if (snakeHead && (snakeHead.x !== 0 || snakeHead.y !== 0)) {
+    clampSnakeInsideCanvas()
+  }
+}
+
+function clampSnakeInsideCanvas() {
+  if (!canvas.width || !canvas.height) return
+
+  snakeHead.x = Math.min(Math.max(snakeHead.x, segLength), canvas.width - segLength)
+  snakeHead.y = Math.min(Math.max(snakeHead.y, segLength), canvas.height - segLength)
+  resetSnakeBody()
 }
 
 function init() {
