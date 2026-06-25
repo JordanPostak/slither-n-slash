@@ -84,8 +84,8 @@ playSnakeGameBtn.addEventListener('click', function () {
 })
 
 function resizeCanvas() {
-  var rect = gameStage.getBoundingClientRect()
-  var side = Math.max(getCanvasMinSide(), Math.floor(Math.min(rect.width * 0.72, rect.height)))
+  var wrapperRect = canvas.parentElement.getBoundingClientRect()
+  var side = Math.max(getCanvasMinSide(), Math.floor(Math.min(wrapperRect.width, wrapperRect.height)))
   canvas.width = side
   canvas.height = side
   renderScale = getRenderScale()
@@ -177,18 +177,14 @@ function setupTouchJoystick() {
 }
 
 function handleJoystickPointerDown(evt) {
-  // Get canvas center to determine left/right zones
-  var canvasRect = canvas.getBoundingClientRect()
-  var canvasCenter = canvasRect.left + canvasRect.width / 2
-  var isLeftZone = evt.clientX < canvasCenter
-  
-  if (isLeftZone && !boostTouchActive) {
-    // Left zone: boost button
+  var touchZone = evt.target.closest('.touch-zone')
+  if (!touchZone) return
+
+  if (touchZone.classList.contains('touch-zone-left') && !boostTouchActive) {
     boostTouchActive = true
     boostTouchId = evt.pointerId
     document.setPointerCapture(evt.pointerId)
-  } else if (!isLeftZone && !joystickActive) {
-    // Right zone: joystick
+  } else if (touchZone.classList.contains('touch-zone-right') && !joystickActive) {
     joystickActive = true
     joystickTouchId = evt.pointerId
     joystickStartX = evt.clientX
@@ -316,8 +312,8 @@ function stopFoodTimer() {
 
 function getPointerPos(canvasElement, clientX, clientY) {
   var rect = canvasElement.getBoundingClientRect()
-  var pointerX = Math.max(0, Math.min(canvas.width - 1, clientX - rect.left))
-  var pointerY = Math.max(0, Math.min(canvas.height - 1, clientY - rect.top))
+  var pointerX = Math.max(0, Math.min(canvas.width - 1, ((clientX - rect.left) / rect.width) * canvas.width))
+  var pointerY = Math.max(0, Math.min(canvas.height - 1, ((clientY - rect.top) / rect.height) * canvas.height))
 
   return {
     x: pointerX,

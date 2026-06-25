@@ -79,7 +79,8 @@ body.is-boosting .game-shell {
 .touch-zone {
   width: clamp(96px, 14vw, 160px);
   height: 100%;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 canvas {
