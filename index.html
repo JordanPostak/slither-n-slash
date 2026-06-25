@@ -15,9 +15,11 @@
     <audio id="badFoodSound" src="./audio/negative.mp3" preload="auto"></audio>
 
     <main class="game-shell">
-      <div class="mobile-control-bar mobile-action-controls" aria-label="Speed controls" style="display: none;">
-        <button class="touch-control-btn" data-touch-control="boost" type="button">Boost</button>
-        <button class="touch-control-btn" data-touch-control="slow" type="button">Slow</button>
+      <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost control">
+        <div class="control-box-label">Boost</div>
+        <div class="boost-control-gauge">
+          <div class="boost-control-core"></div>
+        </div>
       </div>
 
       <section class="game-stage" aria-label="Slither N' Slash arena">
@@ -25,9 +27,10 @@
         <button class="play-snake-game-btn" type="button">Start Game</button>
       </section>
 
-      <div class="mobile-control-bar mobile-direction-controls" aria-label="Direction controls" style="display: none;">
-        <button class="touch-control-btn" data-touch-control="left" type="button">Left</button>
-        <button class="touch-control-btn" data-touch-control="right" type="button">Right</button>
+      <div class="mobile-control-box joystick-control-box" data-mobile-control="joystick" aria-label="Joystick control">
+        <div class="joystick-origin" id="joystick-origin"></div>
+        <div class="joystick-handle" id="joystick-handle"></div>
+        <div class="control-box-label">Move</div>
       </div>
 
       <aside class="snake-game-panel" aria-label="Slither N' Slash game controls">
@@ -39,14 +42,14 @@
           <h2 class="high-score">High Score: <span id="high-score">0</span></h2>
         </div>
         <div class="boost-label">Boost</div>
+        <div class="boost-panel-display boost-visual-state" aria-label="Boost charge">
+          <div class="boost-control-gauge">
+            <div class="boost-control-core"></div>
+          </div>
+        </div>
         <div class="boost-meter" aria-label="Boost meter">
           <div id="boost-meter-fill" class="boost-meter-fill"></div>
         </div>
-        <p class="game-note">
-          <strong>Desktop:</strong> Hold Left/Right or A/D to turn gradually. Hold Up/W, Shift, or Space to spend boost, then release to recharge it. Down/S brakes.
-          <br/>
-          <strong>Mobile:</strong> Touch and drag on the right side to steer (joystick). Touch the left side to boost.
-        </p>
       </aside>
     </main>
 

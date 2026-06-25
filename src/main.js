@@ -1,20 +1,31 @@
 var canvas, ctx
-var n = 3
+var startingSegments = 6
+var n = startingSegments
 var score = 0
 var a = 0
 var segLength = 10
 var foods = []
+var fireball
+var nextFireballSpawnAt = 0
+var fireballLifetime = 10000
+var fireballSpawnMinDelay = 55000
+var fireballSpawnMaxDelay = 85000
+var fireballMinBeetles = 5
+var beetleBurnDuration = 1400
 var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var steerTarget
+var steerAngleTarget
 var snakeHead = { x: 0, y: 0 }
 var headingAngle = 0
-var snakeSpeed = 3.8
-var boostMultiplier = 2.05
+var snakeSpeed = 3.05
+var boostMultiplier = 1.85
 var mouseFleeRadius = 145
-var mouseFleeSpeed = 4.8
+var mouseFleeSpeed = 3.7
 var mouseFleeStamina = 1200
 var mouseEdgeAvoidance = 70
+var arenaCornerRadius = 76
+var snakeBodyBounceRadius = 18
 var boosting = false
 var boostCoolingDown = false
 var baseBoostDuration = 500
@@ -24,7 +35,6 @@ var boostCooldown = 3000
 var boostEnergy = baseBoostDuration
 var lastBoostUpdateAt = Date.now()
 var touchBoosting = false
-var braking = false
 var pressedKeys = {}
 var turnRate = 0.052
 var animationRequestId
@@ -37,20 +47,24 @@ var mobileControls = {
   left: false,
   right: false,
   boost: false,
-  slow: false,
 }
 var renderScale = 1
+var motionScale = 1
 
 // Mobile joystick controls
 var joystickActive = false
 var joystickTouchId = null
-var joystickStartX = 0
-var joystickStartY = 0
 var joystickCurrentX = 0
 var joystickCurrentY = 0
 var boostTouchActive = false
 var boostTouchId = null
 var joystickDeadzone = 10 // minimum movement before joystick activates
+var joystickBox
+var boostBox
+var joystickOrigin
+var joystickHandle
+var boostControlGauges = []
+var boostVisualStates = []
 
 wormHeadImage.src = './assets/snake_head.png'
 wormBodyImage.src = './assets/snake_body.png'
@@ -88,7 +102,11 @@ function resizeCanvas() {
   canvas.width = Math.max(getCanvasMinSide(), Math.floor(rect.width))
   canvas.height = Math.max(getCanvasMinSide(), Math.floor(rect.height))
   renderScale = getRenderScale()
+  motionScale = getMotionScale()
   segLength = 10 * renderScale
+  arenaCornerRadius = getArenaCornerRadius()
+  snakeBodyBounceRadius = 18 * renderScale
+  gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius + 'px')
 }
 
 function init() {
@@ -115,6 +133,10 @@ function init() {
 
   if (foods.length === 0) {
     foods.push(generateFood())
+  }
+
+  if (!nextFireballSpawnAt) {
+    scheduleNextFireball()
   }
 
   startFoodTimer()
@@ -149,7 +171,18 @@ function setupControls() {
 
     evt.preventDefault()
     pressedKeys[evt.key] = false
-    braking = false
+  })
+
+  canvas.addEventListener('pointermove', function (evt) {
+    if (evt.pointerType !== 'mouse') return
+
+    steerTarget = getPointerPos(canvas, evt.clientX, evt.clientY)
+  })
+
+  canvas.addEventListener('pointerleave', function (evt) {
+    if (evt.pointerType !== 'mouse') return
+
+    steerTarget = undefined
   })
 
   window.addEventListener('blur', function () {
@@ -158,51 +191,60 @@ function setupControls() {
 }
 
 function setupTouchJoystick() {
-  document.addEventListener('pointerdown', handleJoystickPointerDown)
-  document.addEventListener('pointermove', handleJoystickPointerMove)
-  document.addEventListener('pointerup', handleJoystickPointerUp)
-  document.addEventListener('pointercancel', handleJoystickPointerUp)
+  joystickBox = document.querySelector('[data-mobile-control="joystick"]')
+  boostBox = document.querySelector('[data-mobile-control="boost"]')
+  joystickOrigin = document.getElementById('joystick-origin')
+  joystickHandle = document.getElementById('joystick-handle')
+  boostControlGauges = document.querySelectorAll('.boost-control-gauge')
+  boostVisualStates = document.querySelectorAll('.boost-visual-state')
+
+  if (joystickBox) {
+    joystickBox.addEventListener('pointerdown', handleJoystickPointerDown)
+    joystickBox.addEventListener('pointermove', handleJoystickPointerMove)
+    joystickBox.addEventListener('pointerup', handleJoystickPointerUp)
+    joystickBox.addEventListener('pointercancel', handleJoystickPointerUp)
+    joystickBox.addEventListener('lostpointercapture', handleJoystickPointerUp)
+  }
+
+  if (boostBox) {
+    boostBox.addEventListener('pointerdown', handleBoostPointerDown)
+    boostBox.addEventListener('pointerup', handleBoostPointerUp)
+    boostBox.addEventListener('pointercancel', handleBoostPointerUp)
+    boostBox.addEventListener('lostpointercapture', handleBoostPointerUp)
+  }
 }
 
 function handleJoystickPointerDown(evt) {
-  // Get canvas center to determine left/right zones
-  var canvasRect = canvas.getBoundingClientRect()
-  var canvasCenter = canvasRect.left + canvasRect.width / 2
-  var isLeftZone = evt.clientX < canvasCenter
-  
-  if (isLeftZone && !boostTouchActive) {
-    // Left zone: boost button
-    boostTouchActive = true
-    boostTouchId = evt.pointerId
-    document.setPointerCapture(evt.pointerId)
-  } else if (!isLeftZone && !joystickActive) {
-    // Right zone: joystick
-    joystickActive = true
-    joystickTouchId = evt.pointerId
-    joystickStartX = evt.clientX
-    joystickStartY = evt.clientY
-    joystickCurrentX = evt.clientX
-    joystickCurrentY = evt.clientY
-    document.setPointerCapture(evt.pointerId)
-    steerTarget = undefined
-  }
+  if (joystickActive) return
+
+  evt.preventDefault()
+  joystickActive = true
+  joystickTouchId = evt.pointerId
+  joystickCurrentX = evt.clientX
+  joystickCurrentY = evt.clientY
+  evt.currentTarget.setPointerCapture(evt.pointerId)
+  steerTarget = undefined
+  updateJoystickVisual()
 }
 
 function handleJoystickPointerMove(evt) {
   if (evt.pointerId === joystickTouchId && joystickActive) {
+    evt.preventDefault()
     joystickCurrentX = evt.clientX
     joystickCurrentY = evt.clientY
+    var joystickRect = joystickBox.getBoundingClientRect()
     
     // Calculate distance from start
-    var deltaX = joystickCurrentX - joystickStartX
-    var deltaY = joystickCurrentY - joystickStartY
+    var deltaX = joystickCurrentX - (joystickRect.left + joystickRect.width / 2)
+    var deltaY = joystickCurrentY - (joystickRect.top + joystickRect.height / 2)
     var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     
     // Only apply steering if beyond deadzone
     if (distance > joystickDeadzone) {
-      var angle = Math.atan2(deltaY, deltaX)
-      headingAngle = angle
+      steerAngleTarget = Math.atan2(deltaY, deltaX)
     }
+
+    updateJoystickVisual()
   }
 }
 
@@ -210,11 +252,26 @@ function handleJoystickPointerUp(evt) {
   if (evt.pointerId === joystickTouchId) {
     joystickActive = false
     joystickTouchId = null
+    steerAngleTarget = undefined
+    updateJoystickVisual()
   }
-  
+}
+
+function handleBoostPointerDown(evt) {
+  if (boostTouchActive) return
+
+  evt.preventDefault()
+  boostTouchActive = true
+  boostTouchId = evt.pointerId
+  evt.currentTarget.setPointerCapture(evt.pointerId)
+  updateBoostMeterStatus()
+}
+
+function handleBoostPointerUp(evt) {
   if (evt.pointerId === boostTouchId) {
     boostTouchActive = false
     boostTouchId = null
+    updateBoostMeterStatus()
   }
 }
 
@@ -226,8 +283,48 @@ function releaseMobileControls() {
   mobileControls.left = false
   mobileControls.right = false
   mobileControls.boost = false
-  mobileControls.slow = false
   touchBoosting = false
+  steerAngleTarget = undefined
+  updateJoystickVisual()
+  updateBoostMeterStatus()
+}
+
+function updateJoystickVisual() {
+  if (!joystickBox || !joystickOrigin || !joystickHandle) return
+
+  if (!joystickActive) {
+    joystickBox.classList.remove('is-active')
+    joystickOrigin.style.opacity = 1
+    joystickOrigin.style.left = '50%'
+    joystickOrigin.style.top = '50%'
+    joystickHandle.style.opacity = 0
+    return
+  }
+
+  var boxRect = joystickBox.getBoundingClientRect()
+  var startX = boxRect.width / 2
+  var startY = boxRect.height / 2
+  var currentX = joystickCurrentX - boxRect.left
+  var currentY = joystickCurrentY - boxRect.top
+  var maxTravel = Math.min(boxRect.width, boxRect.height) * 0.34
+  var deltaX = currentX - startX
+  var deltaY = currentY - startY
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+  if (distance > maxTravel) {
+    deltaX = deltaX / distance * maxTravel
+    deltaY = deltaY / distance * maxTravel
+    currentX = startX + deltaX
+    currentY = startY + deltaY
+  }
+
+  joystickBox.classList.add('is-active')
+  joystickOrigin.style.opacity = 1
+  joystickHandle.style.opacity = 1
+  joystickOrigin.style.left = startX + 'px'
+  joystickOrigin.style.top = startY + 'px'
+  joystickHandle.style.left = currentX + 'px'
+  joystickHandle.style.top = currentY + 'px'
 }
 
 function isMovementKey(key) {
@@ -235,21 +332,18 @@ function isMovementKey(key) {
     key === 'ArrowLeft' ||
     key === 'ArrowRight' ||
     key === 'ArrowUp' ||
-    key === 'ArrowDown' ||
     key === 'a' ||
     key === 'A' ||
     key === 'd' ||
     key === 'D' ||
     key === 'w' ||
-    key === 'W' ||
-    key === 's' ||
-    key === 'S'
+    key === 'W'
   )
 }
 
-function generateFood() {
+function generateFood(forceBad) {
   var velocity = getRandomFoodVelocity()
-  var isBad = Math.random() < 0.38
+  var isBad = forceBad === undefined ? Math.random() < 0.38 : forceBad
   var foodMargin = 20 * renderScale
 
   return {
@@ -268,7 +362,7 @@ function generateFood() {
 
 function getRandomFoodVelocity() {
   var angle = Math.random() * Math.PI * 2
-  var speed = 1.35 + Math.random() * 1.45
+  var speed = (0.9 + Math.random() * 1.05) * motionScale
 
   return {
     dx: Math.cos(angle) * speed,
@@ -278,7 +372,7 @@ function getRandomFoodVelocity() {
 
 function getRandomMouseVelocity() {
   var angle = Math.random() * Math.PI * 2
-  var speed = 0.8 + Math.random() * 1.65
+  var speed = (0.55 + Math.random() * 1.1) * motionScale
 
   return {
     dx: Math.cos(angle) * speed,
@@ -320,6 +414,7 @@ function animate() {
       updateBoostEnergy()
       updateBoostMeterStatus()
       foodRandom()
+      updateFireball()
       moveSnakeHead()
 
       for (var i = 0; i < foods.length; i++) {
@@ -329,8 +424,13 @@ function animate() {
           snakeHead.y > foods[i].y - renderScale &&
           snakeHead.y < foods[i].y + 18 * renderScale
         ) {
+          if (foods[i].isBurning) {
+            drawFood(foods[i])
+            continue
+          }
+
           if (foods[i].isBad) {
-            n = 3
+            n = startingSegments
             x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
             y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
             resetSnakeBody()
@@ -355,6 +455,16 @@ function animate() {
         drawFood(foods[i])
       }
 
+      if (fireball) {
+        if (isSnakeTouchingEntity(fireball, 22 * renderScale)) {
+          burnPoisonBeetles()
+          fireball = undefined
+          scheduleNextFireball()
+        } else {
+          drawFireball(fireball)
+        }
+      }
+
       document.getElementById('high-score').innerHTML = getHighScore()
       drawSnake(snakeHead.x, snakeHead.y)
     }
@@ -365,10 +475,16 @@ function animate() {
 
 function drawFood(food) {
   if (food.isBad) {
-    drawBadFood(food.x + 6 * renderScale, food.y + 5 * renderScale)
+    drawBadFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, food.isBurning)
   } else {
     drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
   }
+}
+
+function isSnakeTouchingEntity(entity, radius) {
+  var dx = snakeHead.x - entity.x
+  var dy = snakeHead.y - entity.y
+  return dx * dx + dy * dy < radius * radius
 }
 
 function drawGoodFood(centerX, centerY, angle) {
@@ -437,53 +553,234 @@ function drawGoodFood(centerX, centerY, angle) {
   ctx.restore()
 }
 
-function drawBadFood(centerX, centerY) {
+function drawBadFood(centerX, centerY, angle, isBurning) {
+  var now = Date.now()
+  var legStep = isBurning ? 0 : Math.sin(now * 0.018 + centerX * 0.04 + centerY * 0.03) * 2.4
+  var flameStep = Math.sin(now * 0.032 + centerX * 0.04) * 2
+
   ctx.save()
   ctx.translate(centerX, centerY)
+  ctx.rotate(angle + Math.PI / 2)
   ctx.scale(renderScale, renderScale)
 
-  ctx.fillStyle = 'rgba(120, 255, 86, 0.14)'
+  ctx.fillStyle = 'rgba(120, 255, 86, 0.12)'
   ctx.beginPath()
-  ctx.arc(0, 0, 17, 0, Math.PI * 2)
+  ctx.arc(0, 0, 18, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.fillStyle = '#6f1430'
+  ctx.strokeStyle = '#1b080f'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(-10, -8)
+  ctx.lineTo(-16, -13 + legStep)
+  ctx.moveTo(10, -8)
+  ctx.lineTo(16, -13 - legStep)
+  ctx.moveTo(-12, 0)
+  ctx.lineTo(-18, legStep)
+  ctx.moveTo(12, 0)
+  ctx.lineTo(18, -legStep)
+  ctx.moveTo(-9, 8)
+  ctx.lineTo(-15, 13 - legStep)
+  ctx.moveTo(9, 8)
+  ctx.lineTo(15, 13 + legStep)
+  ctx.stroke()
+
+  ctx.fillStyle = '#231015'
   ctx.strokeStyle = '#260710'
   ctx.lineWidth = 2
   ctx.beginPath()
-  ctx.arc(0, 0, 12, 0, Math.PI * 2)
+  ctx.ellipse(0, 1, 12, 15, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#9e1c41'
+  ctx.fillStyle = '#861936'
   ctx.beginPath()
-  ctx.arc(0, 0, 8, 0, Math.PI * 2)
-  ctx.fill()
-
-  ctx.fillStyle = '#2e2115'
-  ctx.beginPath()
-  ctx.arc(0, 0, 3.5, 0, Math.PI * 2)
+  ctx.ellipse(0, -2, 9, 11, 0, 0, Math.PI * 2)
   ctx.fill()
 
   ctx.fillStyle = '#b7e24a'
   ctx.beginPath()
-  ctx.arc(-5, -6, 2.1, 0, Math.PI * 2)
-  ctx.arc(5, -5, 1.8, 0, Math.PI * 2)
-  ctx.arc(7, 3, 2.3, 0, Math.PI * 2)
-  ctx.arc(-6, 5, 1.7, 0, Math.PI * 2)
+  ctx.arc(-4, -6, 2.5, 0, Math.PI * 2)
+  ctx.arc(4, -6, 2.5, 0, Math.PI * 2)
+  ctx.arc(-5, 2, 2, 0, Math.PI * 2)
+  ctx.arc(5, 2, 2, 0, Math.PI * 2)
   ctx.fill()
 
   ctx.strokeStyle = '#d5ff62'
-  ctx.lineWidth = 1.5
+  ctx.lineWidth = 1.4
   ctx.beginPath()
-  ctx.moveTo(-8, -1)
-  ctx.lineTo(-2, 1)
-  ctx.lineTo(1, -4)
-  ctx.moveTo(3, 2)
-  ctx.lineTo(8, -1)
-  ctx.moveTo(-1, 5)
-  ctx.lineTo(4, 8)
+  ctx.moveTo(0, -12)
+  ctx.lineTo(0, 12)
+  ctx.moveTo(-7, -1)
+  ctx.lineTo(7, -1)
   ctx.stroke()
+
+  ctx.fillStyle = '#2eff6e'
+  ctx.beginPath()
+  ctx.arc(-4, -12, 1.4, 0, Math.PI * 2)
+  ctx.arc(4, -12, 1.4, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = '#8cff52'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.moveTo(-4, -14)
+  ctx.lineTo(-8, -18)
+  ctx.moveTo(4, -14)
+  ctx.lineTo(8, -18)
+  ctx.stroke()
+
+  if (isBurning) {
+    ctx.fillStyle = 'rgba(255, 116, 35, 0.2)'
+    ctx.beginPath()
+    ctx.arc(0, 0, 21 + flameStep, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.fillStyle = '#ff6f21'
+    ctx.strokeStyle = '#ffe36c'
+    ctx.lineWidth = 1.4
+    ctx.beginPath()
+    ctx.moveTo(-9, 5)
+    ctx.bezierCurveTo(-15, -2, -9, -10 - flameStep, -4, -6)
+    ctx.bezierCurveTo(-4, -15, 4, -13, 2, -5)
+    ctx.bezierCurveTo(9, -12, 15, -3, 9, 5)
+    ctx.bezierCurveTo(5, 10, -5, 10, -9, 5)
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.fillStyle = '#ffe76a'
+    ctx.beginPath()
+    ctx.moveTo(-3, 4)
+    ctx.bezierCurveTo(-6, -1, -2, -7, 1, -3)
+    ctx.bezierCurveTo(6, -7, 8, 1, 4, 5)
+    ctx.bezierCurveTo(2, 7, -1, 7, -3, 4)
+    ctx.fill()
+  }
+
+  ctx.restore()
+}
+
+function updateFireball() {
+  var now = Date.now()
+
+  if (!fireball && now >= nextFireballSpawnAt) {
+    if (getActiveBeetleCount() >= fireballMinBeetles) {
+      fireball = generateFireball()
+    } else {
+      scheduleNextFireball()
+    }
+  }
+
+  if (!fireball) return
+
+  if (now > fireball.expiresAt) {
+    fireball = undefined
+    scheduleNextFireball()
+    return
+  }
+
+  fireball.x += fireball.dx
+  fireball.y += fireball.dy
+  fireball.facingAngle = Math.atan2(fireball.dy, fireball.dx)
+
+  var fireballEdgeSize = 18 * renderScale
+
+  applySnakeBodyBounce(fireball)
+  applyRoundedArenaBounds(fireball, fireballEdgeSize)
+
+  if (fireball.x < 0 || fireball.x > canvas.width - fireballEdgeSize) {
+    fireball.dx *= -1
+    fireball.facingAngle = Math.atan2(fireball.dy, fireball.dx)
+    fireball.x = Math.max(0, Math.min(canvas.width - fireballEdgeSize, fireball.x))
+  }
+
+  if (fireball.y < 0 || fireball.y > canvas.height - fireballEdgeSize) {
+    fireball.dy *= -1
+    fireball.facingAngle = Math.atan2(fireball.dy, fireball.dx)
+    fireball.y = Math.max(0, Math.min(canvas.height - fireballEdgeSize, fireball.y))
+  }
+}
+
+function generateFireball() {
+  var velocity = getRandomFoodVelocity()
+  var fireballMargin = 40 * renderScale
+
+  return {
+    x: fireballMargin / 2 + Math.random() * (canvas.width - fireballMargin),
+    y: fireballMargin / 2 + Math.random() * (canvas.height - fireballMargin),
+    dx: velocity.dx * 1.12,
+    dy: velocity.dy * 1.12,
+    facingAngle: Math.atan2(velocity.dy, velocity.dx),
+    expiresAt: Date.now() + fireballLifetime,
+  }
+}
+
+function scheduleNextFireball() {
+  nextFireballSpawnAt = Date.now() + fireballSpawnMinDelay + Math.random() * (fireballSpawnMaxDelay - fireballSpawnMinDelay)
+}
+
+function getActiveBeetleCount() {
+  var beetleCount = 0
+
+  for (var i = 0; i < foods.length; i++) {
+    if (foods[i].isBad && !foods[i].isBurning) {
+      beetleCount += 1
+    }
+  }
+
+  return beetleCount
+}
+
+function burnPoisonBeetles() {
+  var now = Date.now()
+  var burnedAny = false
+
+  for (var i = 0; i < foods.length; i++) {
+    if (foods[i].isBad && !foods[i].isBurning) {
+      foods[i].isBurning = true
+      foods[i].burnUntil = now + beetleBurnDuration
+      foods[i].dx = 0
+      foods[i].dy = 0
+      foods[i].pauseUntil = foods[i].burnUntil
+      burnedAny = true
+    }
+  }
+
+  if (burnedAny) {
+    playSound('goodFoodSound')
+  }
+}
+
+function drawFireball(powerup) {
+  var flicker = Math.sin(Date.now() * 0.024 + powerup.x * 0.03) * 2
+
+  ctx.save()
+  ctx.translate(powerup.x, powerup.y)
+  ctx.rotate(powerup.facingAngle)
+  ctx.scale(renderScale, renderScale)
+
+  ctx.fillStyle = 'rgba(255, 116, 35, 0.16)'
+  ctx.beginPath()
+  ctx.arc(0, 0, 22 + flicker, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#ff6f21'
+  ctx.strokeStyle = '#ffe36c'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(14, 0)
+  ctx.bezierCurveTo(5, -14 - flicker, -10, -12, -16, -2)
+  ctx.bezierCurveTo(-8, 0, -12, 9 + flicker, 0, 15)
+  ctx.bezierCurveTo(8, 10, 15, 7, 14, 0)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#ffe76a'
+  ctx.beginPath()
+  ctx.moveTo(8, 0)
+  ctx.bezierCurveTo(2, -7, -5, -5, -8, 1)
+  ctx.bezierCurveTo(-4, 6, 1, 8, 7, 3)
+  ctx.fill()
 
   ctx.restore()
 }
@@ -493,12 +790,13 @@ function moveSnakeHead() {
 
   if (steerTarget) {
     var targetAngle = Math.atan2(steerTarget.y - snakeHead.y, steerTarget.x - snakeHead.x)
-    headingAngle = turnTowardAngle(headingAngle, targetAngle, 0.12)
+    headingAngle = turnTowardAngle(headingAngle, targetAngle, turnRate)
+  } else if (steerAngleTarget !== undefined) {
+    headingAngle = turnTowardAngle(headingAngle, steerAngleTarget, turnRate)
   }
 
-  var currentSpeed = snakeSpeed * (0.84 + renderScale * 0.16)
+  var currentSpeed = snakeSpeed * motionScale
   if (boosting) currentSpeed *= boostMultiplier
-  if (braking) currentSpeed *= 0.48
 
   snakeHead.x += Math.cos(headingAngle) * currentSpeed
   snakeHead.y += Math.sin(headingAngle) * currentSpeed
@@ -522,28 +820,29 @@ function moveSnakeHead() {
     snakeHead.y = canvas.height
     headingAngle = -headingAngle
   }
+
+  applyRoundedSnakeBounds()
 }
 
 function applyKeyboardControls() {
   var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
   var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
-  var brakingBackward = pressedKeys.ArrowDown || pressedKeys.s || pressedKeys.S
 
   if (turningLeft && !turningRight) {
     headingAngle -= turnRate
     steerTarget = undefined
+    steerAngleTarget = undefined
   }
 
   if (turningRight && !turningLeft) {
     headingAngle += turnRate
     steerTarget = undefined
+    steerAngleTarget = undefined
   }
-
-  braking = Boolean(brakingBackward)
 }
 
 function getBoostDuration() {
-  var extraSegments = Math.max(0, n - 3)
+  var extraSegments = Math.max(0, n - startingSegments)
   return Math.min(maxBoostDuration, baseBoostDuration + extraSegments * boostDurationPerSegment)
 }
 
@@ -609,38 +908,61 @@ function setBoosting(nextBoosting) {
 
 function updateBoostMeterStatus() {
   var boostMeterFill = document.getElementById('boost-meter-fill')
-  if (!boostMeterFill) return
 
   var maxEnergy = getBoostDuration()
   var boostProgress = boostEnergy / maxEnergy
   var boostHeld = isBoostControlActive()
+  var boostState = 'ready'
 
   if (boosting) {
-    updateBoostMeter(boostMeterFill, boostProgress, 'active')
+    boostState = 'active'
+    updateBoostMeter(boostMeterFill, boostProgress, boostState)
+    updateBoostControlVisual(boostProgress, boostState)
     return
   }
 
   if (boostHeld && boostEnergy <= 0) {
-    updateBoostMeter(boostMeterFill, 0, 'cooldown')
+    boostState = 'cooldown'
+    updateBoostMeter(boostMeterFill, 0, boostState)
+    updateBoostControlVisual(0, boostState)
     return
   }
 
   if (boostCoolingDown) {
-    updateBoostMeter(boostMeterFill, boostProgress, 'cooldown')
+    boostState = 'cooldown'
+    updateBoostMeter(boostMeterFill, boostProgress, boostState)
+    updateBoostControlVisual(boostProgress, boostState)
     return
   }
 
-  updateBoostMeter(boostMeterFill, 1, 'ready')
+  updateBoostMeter(boostMeterFill, 1, boostState)
+  updateBoostControlVisual(1, boostState)
 }
 
 function updateBoostMeter(meterFill, progress, state) {
+  if (!meterFill) return
+
   meterFill.style.width = Math.max(0, Math.min(1, progress)) * 100 + '%'
   meterFill.className = 'boost-meter-fill ' + state
 }
 
+function updateBoostControlVisual(progress, state) {
+  var clampedProgress = Math.max(0, Math.min(1, progress))
+
+  for (var i = 0; i < boostControlGauges.length; i++) {
+    boostControlGauges[i].style.setProperty('--boost-progress', clampedProgress * 100 + '%')
+  }
+
+  for (var j = 0; j < boostVisualStates.length; j++) {
+    boostVisualStates[j].classList.toggle('is-active', state === 'active')
+    boostVisualStates[j].classList.toggle('is-cooling', state === 'cooldown')
+  }
+}
+
 function turnTowardAngle(current, target, amount) {
   var difference = Math.atan2(Math.sin(target - current), Math.cos(target - current))
-  return current + difference * amount
+  var turnAmount = Math.max(-amount, Math.min(amount, difference))
+  return current + turnAmount
 }
 
 function playSound(id) {
@@ -741,6 +1063,16 @@ function resetSnakeBody() {
 
 function foodRandom() {
   for (var i = 0; i < foods.length; i++) {
+    if (foods[i].isBurning) {
+      if (Date.now() >= foods[i].burnUntil) {
+        foods[i] = generateFood(false)
+      } else {
+        foods[i].dx = 0
+        foods[i].dy = 0
+        continue
+      }
+    }
+
     if (!foods[i].initialized) {
       foods[i].x = Math.random() * canvas.width
       foods[i].y = Math.random() * canvas.height
@@ -764,6 +1096,9 @@ function foodRandom() {
 
     var foodEdgeSize = 13 * renderScale
 
+    applySnakeBodyBounce(foods[i])
+    applyRoundedArenaBounds(foods[i], foodEdgeSize)
+
     if (foods[i].x < 0 || foods[i].x > canvas.width - foodEdgeSize) {
       foods[i].dx *= -1
       foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
@@ -777,6 +1112,52 @@ function foodRandom() {
     }
 
   }
+}
+
+function applySnakeBodyBounce(entity) {
+  var entityRadius = 9 * renderScale
+  var minDistance = snakeBodyBounceRadius + entityRadius
+  var minDistanceSquared = minDistance * minDistance
+  var nearestSegment = null
+  var nearestDistanceSquared = Infinity
+
+  for (var i = 0; i < x.length; i++) {
+    var dxFromSegment = entity.x - x[i]
+    var dyFromSegment = entity.y - y[i]
+    var distanceSquared = dxFromSegment * dxFromSegment + dyFromSegment * dyFromSegment
+
+    if (distanceSquared < minDistanceSquared && distanceSquared < nearestDistanceSquared) {
+      nearestSegment = {
+        dx: dxFromSegment,
+        dy: dyFromSegment,
+      }
+      nearestDistanceSquared = distanceSquared
+    }
+  }
+
+  if (!nearestSegment) return
+
+  var distance = Math.sqrt(nearestDistanceSquared) || 0.001
+  var normalX = nearestSegment.dx / distance
+  var normalY = nearestSegment.dy / distance
+  var overlap = minDistance - distance
+
+  entity.x += normalX * overlap
+  entity.y += normalY * overlap
+
+  var velocityIntoBody = entity.dx * normalX + entity.dy * normalY
+  if (velocityIntoBody < 0) {
+    entity.dx -= 2 * velocityIntoBody * normalX
+    entity.dy -= 2 * velocityIntoBody * normalY
+  } else if (Math.abs(entity.dx) + Math.abs(entity.dy) < 0.01) {
+    entity.dx = normalX * 1.2
+    entity.dy = normalY * 1.2
+  }
+
+  entity.dx += normalX * 0.08
+  entity.dy += normalY * 0.08
+  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+  entity.pauseUntil = 0
 }
 
 function updateMouseMovement(food) {
@@ -808,7 +1189,7 @@ function updateMouseMovement(food) {
     var fleeAngle = Math.atan2(fleeY, fleeX)
     var panic = 1 - distanceFromSnake / fleeRadius
     var staminaScale = 0.55 + 0.45 * (food.fleeEnergy / mouseFleeStamina)
-    var speed = (mouseFleeSpeed + panic * 0.6) * staminaScale
+    var speed = (mouseFleeSpeed + panic * 0.45) * staminaScale * motionScale
 
     food.dx = Math.cos(fleeAngle) * speed
     food.dy = Math.sin(fleeAngle) * speed
@@ -853,6 +1234,7 @@ function getEdgeAvoidanceVector(food) {
   var yForce = 0
 
   var edgeAvoidance = mouseEdgeAvoidance * renderScale
+  var roundedCorrection = getRoundedArenaCorrection(food.x, food.y, 13 * renderScale)
 
   if (food.x < edgeAvoidance) {
     xForce += (edgeAvoidance - food.x) / edgeAvoidance
@@ -866,9 +1248,92 @@ function getEdgeAvoidanceVector(food) {
     yForce -= (food.y - (canvas.height - edgeAvoidance)) / edgeAvoidance
   }
 
+  if (roundedCorrection) {
+    xForce += roundedCorrection.normalX * roundedCorrection.strength * 2.25
+    yForce += roundedCorrection.normalY * roundedCorrection.strength * 2.25
+  }
+
   return {
     x: xForce,
     y: yForce,
+  }
+}
+
+function applyRoundedArenaBounds(entity, padding) {
+  var correction = getRoundedArenaCorrection(entity.x, entity.y, padding)
+  if (!correction) return
+
+  entity.x = correction.x
+  entity.y = correction.y
+
+  var velocityIntoWall = entity.dx * correction.normalX + entity.dy * correction.normalY
+  if (velocityIntoWall <= 0) return
+
+  entity.dx -= 2 * velocityIntoWall * correction.normalX
+  entity.dy -= 2 * velocityIntoWall * correction.normalY
+  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+}
+
+function applyRoundedSnakeBounds() {
+  var correction = getRoundedArenaCorrection(snakeHead.x, snakeHead.y, segLength * 1.8)
+  if (!correction) return
+
+  snakeHead.x = correction.x
+  snakeHead.y = correction.y
+
+  var velocityX = Math.cos(headingAngle)
+  var velocityY = Math.sin(headingAngle)
+  var velocityIntoWall = velocityX * correction.normalX + velocityY * correction.normalY
+  if (velocityIntoWall <= 0) return
+
+  velocityX -= 2 * velocityIntoWall * correction.normalX
+  velocityY -= 2 * velocityIntoWall * correction.normalY
+  headingAngle = Math.atan2(velocityY, velocityX)
+}
+
+function getRoundedArenaCorrection(pointX, pointY, padding) {
+  var radius = Math.max(padding + 8, arenaCornerRadius - padding)
+  var left = padding
+  var right = canvas.width - padding
+  var top = padding
+  var bottom = canvas.height - padding
+
+  var cornerCenterX
+  var cornerCenterY
+
+  if (pointX < left + radius && pointY < top + radius) {
+    cornerCenterX = left + radius
+    cornerCenterY = top + radius
+  } else if (pointX > right - radius && pointY < top + radius) {
+    cornerCenterX = right - radius
+    cornerCenterY = top + radius
+  } else if (pointX < left + radius && pointY > bottom - radius) {
+    cornerCenterX = left + radius
+    cornerCenterY = bottom - radius
+  } else if (pointX > right - radius && pointY > bottom - radius) {
+    cornerCenterX = right - radius
+    cornerCenterY = bottom - radius
+  } else {
+    return null
+  }
+
+  var dx = pointX - cornerCenterX
+  var dy = pointY - cornerCenterY
+  var distance = Math.sqrt(dx * dx + dy * dy)
+
+  if (distance <= radius) return null
+
+  var normalX = dx / distance
+  var normalY = dy / distance
+  var correctedX = cornerCenterX + normalX * radius
+  var correctedY = cornerCenterY + normalY * radius
+
+  return {
+    x: correctedX,
+    y: correctedY,
+    normalX: normalX,
+    normalY: normalY,
+    strength: Math.min(1, (distance - radius) / radius),
   }
 }
 
@@ -878,7 +1343,17 @@ function getCanvasMinSide() {
 
 function getRenderScale() {
   var shortestSide = Math.min(canvas.width, canvas.height)
-  return Math.max(0.68, Math.min(1, shortestSide / 520))
+  return Math.max(0.52, Math.min(1, shortestSide / 620))
+}
+
+function getMotionScale() {
+  var shortestSide = Math.min(canvas.width, canvas.height)
+  return Math.max(0.56, Math.min(1, shortestSide / 700))
+}
+
+function getArenaCornerRadius() {
+  var shortestSide = Math.min(canvas.width, canvas.height)
+  return Math.max(34 * renderScale, Math.min(92 * renderScale, shortestSide * 0.16))
 }
 
 function drawLine(x1, y1, x2, y2, color, width) {
