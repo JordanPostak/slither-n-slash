@@ -68,10 +68,11 @@ body.is-boosting .game-shell {
 .game-stage {
   position: relative;
   --arena-corner-radius: 24px;
+  --arena-rock-size: 420px;
   min-width: 0;
   min-height: 360px;
   overflow: hidden;
-  background: url("../assets/dark-rock-background.png") center / 620px 620px repeat;
+  background: url("../assets/dark-rock-background.png") center / var(--arena-rock-size) var(--arena-rock-size) repeat;
   border: 2px solid rgba(255, 214, 133, 0.42);
   border-radius: var(--arena-corner-radius);
 }
@@ -368,6 +369,7 @@ button {
   }
 
   .game-stage {
+    --arena-rock-size: 300px;
     grid-column: 1 / -1;
     grid-row: 2;
     min-height: 0;
@@ -601,6 +603,7 @@ button {
   }
 
   .game-stage {
+    --arena-rock-size: 260px;
     grid-column: 2;
     grid-row: 1 / -1;
     border-top: 0;
@@ -708,6 +711,10 @@ button {
 }
 
 @media (max-width: 420px) and (orientation: portrait) {
+  .game-stage {
+    --arena-rock-size: 240px;
+  }
+
   .snake-game-panel {
     grid-template-columns: auto auto auto;
     justify-content: space-between;

@@ -393,8 +393,9 @@ function isMovementKey(key) {
 }
 
 function generateFood(forceBad) {
-  var velocity = getRandomFoodVelocity()
-  var isBad = forceBad === undefined ? Math.random() < 0.38 : forceBad
+  var isBad = forceBad === undefined ? Math.random() < 0.34 : forceBad
+  var isGrub = !isBad && forceBad === undefined && Math.random() < 0.48
+  var velocity = isGrub ? getRandomGrubVelocity() : getRandomFoodVelocity()
   var foodMargin = 20 * renderScale
 
   return {
@@ -403,6 +404,9 @@ function generateFood(forceBad) {
     dx: velocity.dx,
     dy: velocity.dy,
     facingAngle: Math.atan2(velocity.dy, velocity.dx),
+    type: isBad ? 'beetle' : isGrub ? 'grub' : 'mouse',
+    growthValue: isBad ? 0 : isGrub ? 1 : 3,
+    swallowRadius: (isGrub ? 30 : 24) * renderScale,
     isBad: isBad,
     initialized: true,
     pauseUntil: 0,
@@ -469,7 +473,9 @@ function animate() {
       moveSnakeHead()
 
       for (var i = 0; i < foods.length; i++) {
-        if (isSnakeTouchingEntity(foods[i], swallowRadius)) {
+        var entitySwallowRadius = foods[i].swallowRadius || swallowRadius
+
+        if (isSnakeTouchingEntity(foods[i], entitySwallowRadius)) {
           if (foods[i].isBurning) {
             drawFood(foods[i])
             continue
@@ -484,10 +490,12 @@ function animate() {
             document.getElementById('score').innerHTML = score
             playSound('badFoodSound')
           } else {
-            n += 1
-            score += 1
+            var growthValue = foods[i].growthValue || 1
+
+            n += growthValue
+            score += growthValue
             document.getElementById('score').innerHTML = score
-            changes(n)
+            addSnakeSegments(growthValue)
             playSound('goodFoodSound')
           }
 
@@ -522,8 +530,20 @@ function animate() {
 function drawFood(food) {
   if (food.isBad) {
     drawBadFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, food.isBurning)
+  } else if (food.type === 'grub') {
+    drawGrubFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
   } else {
     drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
+  }
+}
+
+function getRandomGrubVelocity() {
+  var angle = Math.random() * Math.PI * 2
+  var speed = (0.22 + Math.random() * 0.38) * motionScale
+
+  return {
+    dx: Math.cos(angle) * speed,
+    dy: Math.sin(angle) * speed,
   }
 }
 
@@ -594,6 +614,51 @@ function drawGoodFood(centerX, centerY, angle) {
   ctx.ellipse(2, -8, 2.2, 1.1, 0, 0, Math.PI * 2)
   ctx.ellipse(-5, 8, 2.2, 1.1, 0, 0, Math.PI * 2)
   ctx.ellipse(2, 8, 2.2, 1.1, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.restore()
+}
+
+function drawGrubFood(centerX, centerY, angle) {
+  var wiggle = Math.sin(Date.now() * 0.01 + centerX * 0.03) * 1.8
+
+  ctx.save()
+  ctx.translate(centerX, centerY)
+  ctx.rotate(angle)
+  ctx.scale(renderScale, renderScale)
+
+  ctx.fillStyle = 'rgba(255, 230, 120, 0.14)'
+  ctx.beginPath()
+  ctx.ellipse(0, 0, 17, 12, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#e7c986'
+  ctx.strokeStyle = '#705536'
+  ctx.lineWidth = 1.7
+  ctx.beginPath()
+  ctx.ellipse(-3, wiggle * 0.2, 13, 8, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.strokeStyle = 'rgba(112, 85, 54, 0.55)'
+  ctx.lineWidth = 1.1
+  ctx.beginPath()
+  ctx.moveTo(-9, -5)
+  ctx.quadraticCurveTo(-6, 0, -9, 5)
+  ctx.moveTo(-3, -7)
+  ctx.quadraticCurveTo(0, 0, -3, 7)
+  ctx.moveTo(3, -6)
+  ctx.quadraticCurveTo(6, 0, 3, 6)
+  ctx.stroke()
+
+  ctx.fillStyle = '#f9e7a9'
+  ctx.beginPath()
+  ctx.ellipse(9, 0, 6, 5, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#2e2115'
+  ctx.beginPath()
+  ctx.arc(11, -1.4, 1, 0, Math.PI * 2)
   ctx.fill()
 
   ctx.restore()
@@ -1138,6 +1203,12 @@ function changes(length) {
   y[length - 1] = y[length - 2]
 }
 
+function addSnakeSegments(count) {
+  for (var i = 0; i < count; i++) {
+    changes(n - count + i + 1)
+  }
+}
+
 function resetSnakeBody() {
   for (var i = 0; i < x.length; i++) {
     x[i] = snakeHead.x - Math.cos(headingAngle) * segLength * (i + 1)
@@ -1171,7 +1242,7 @@ function foodRandom() {
       foods[i].initialized = true
     }
 
-    if (!foods[i].isBad) {
+    if (foods[i].type === 'mouse') {
       updateMouseMovement(foods[i])
     }
 
