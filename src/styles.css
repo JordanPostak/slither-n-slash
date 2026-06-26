@@ -7,6 +7,12 @@
   -webkit-font-smoothing: antialiased;
 }
 
+@property --boost-progress {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -196,6 +202,7 @@ button {
   box-shadow:
     0 0 22px rgba(255, 116, 35, 0.32),
     inset 0 0 18px rgba(0, 0, 0, 0.42);
+  transition: --boost-progress 90ms linear, transform 120ms ease, box-shadow 160ms ease;
 }
 
 .boost-control-core {
@@ -423,10 +430,9 @@ button {
   }
 
   .boost-control-box .boost-control-gauge {
-    --boost-progress: 100% !important;
     background:
       radial-gradient(circle at 50% 50%, rgba(255, 247, 220, 0.92) 0 18%, rgba(255, 116, 35, 0.72) 19% 28%, transparent 29%),
-      radial-gradient(circle at 50% 50%, rgba(255, 116, 35, 0.32), rgba(255, 116, 35, 0.08) 46%, rgba(255, 255, 255, 0.12) 47% 50%, transparent 51%);
+      conic-gradient(rgb(255, 116, 35) var(--boost-progress), rgba(255, 255, 255, 0.14) 0);
   }
 
   .boost-control-box.is-pressed {
@@ -526,7 +532,7 @@ button {
   .boost-control-box.is-cooling .boost-control-gauge {
     background:
       radial-gradient(circle at 50% 50%, rgba(255, 247, 220, 0.7) 0 18%, rgba(67, 190, 255, 0.6) 19% 28%, transparent 29%),
-      radial-gradient(circle at 50% 50%, rgba(67, 190, 255, 0.22), rgba(67, 190, 255, 0.06) 46%, rgba(255, 255, 255, 0.1) 47% 50%, transparent 51%);
+      conic-gradient(rgb(67, 190, 255) var(--boost-progress), rgba(255, 255, 255, 0.12) 0);
     box-shadow: 0 0 18px rgba(67, 190, 255, 0.28);
   }
 

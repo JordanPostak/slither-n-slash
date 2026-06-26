@@ -8,11 +8,16 @@ var foods = []
 var fireball
 var nextFireballSpawnAt = 0
 var fireballLifetime = 10000
-var fireballSpawnMinDelay = 55000
-var fireballSpawnMaxDelay = 85000
+var fireballSpawnMinDelay = 60000
+var fireballSpawnMaxDelay = 60000
 var fireballMinBeetles = 5
 var beetleBurnDuration = 1400
 var swallowRadius = 24
+var grubLifetime = 30000
+var mouseLifetime = 20000
+var grubSpawnInterval = 10000
+var mouseSpawnInterval = 20000
+var beetleSpawnInterval = 15000
 var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var steerTarget
@@ -39,10 +44,25 @@ var touchBoosting = false
 var pressedKeys = {}
 var turnRate = 0.052
 var animationRequestId
-var foodSpawnIntervalId
+var foodSpawnIntervalIds = []
 var playing = false
+var badSnakes = []
+var badSnakeStartCount = 1
+var badSnakeMaxCount = 4
+var badSnakeSpawnInterval = 40000
+var badSnakeSpawnIntervalId
+var badSnakeStartSegments = 4
+var badSnakeBaseSpeed = 1.02
+var badSnakeSpeedPerSegment = 0.075
+var badSnakePlayerSpeedPerSegment = 0.025
+var badSnakeMaxSpeed = 2.35
+var badSnakeTurnRate = 0.024
+var snakeBiteSegments = 3
+var snakeCutCooldown = 1650
 var wormHeadImage = new Image()
 var wormBodyImage = new Image()
+var gameAudioContext
+var rivalAudioContext
 var controlsReady = false
 var mobileControls = {
   left: false,
@@ -70,7 +90,7 @@ var boostMeterFill
 var lastBoostVisualUpdateAt = 0
 var lastBoostVisualProgress = -1
 var lastBoostVisualState = ''
-var boostVisualUpdateInterval = 100
+var boostVisualUpdateInterval = 50
 var mobileControlMediaQuery
 
 wormHeadImage.src = './assets/snake_head.png'
@@ -100,6 +120,7 @@ playSnakeGameBtn.addEventListener('click', function () {
     document.body.classList.remove('is-playing')
     cancelAnimationFrame(animationRequestId)
     stopFoodTimer()
+    stopBadSnakeTimer()
     resetBoost()
   }
 })
@@ -139,15 +160,16 @@ function init() {
 
   document.getElementById('high-score').innerHTML = getHighScore()
 
-  if (foods.length === 0) {
-    foods.push(generateFood())
-  }
-
   if (!nextFireballSpawnAt) {
     scheduleNextFireball()
   }
 
+  if (badSnakes.length === 0) {
+    spawnBadSnakes()
+  }
+
   startFoodTimer()
+  startBadSnakeTimer()
   lastBoostUpdateAt = Date.now()
   requestAnimationFrame(animate)
 }
@@ -392,23 +414,29 @@ function isMovementKey(key) {
   )
 }
 
-function generateFood(forceBad) {
-  var isBad = forceBad === undefined ? Math.random() < 0.34 : forceBad
-  var isGrub = !isBad && forceBad === undefined && Math.random() < 0.48
-  var velocity = isGrub ? getRandomGrubVelocity() : getRandomFoodVelocity()
-  var foodMargin = 20 * renderScale
+function generateFood(foodType) {
+  if (foodType === true) foodType = 'beetle'
+  if (foodType === false) foodType = 'mouse'
+  if (!foodType) foodType = 'grub'
+
+  var isBad = foodType === 'beetle'
+  var isGrub = foodType === 'grub'
+  var spawn = getOffscreenSpawn(isGrub ? getRandomGrubSpeed() : getRandomFoodSpeed(), 24 * renderScale)
+  var now = Date.now()
 
   return {
-    x: foodMargin / 2 + Math.random() * (canvas.width - foodMargin),
-    y: foodMargin / 2 + Math.random() * (canvas.height - foodMargin),
-    dx: velocity.dx,
-    dy: velocity.dy,
-    facingAngle: Math.atan2(velocity.dy, velocity.dx),
-    type: isBad ? 'beetle' : isGrub ? 'grub' : 'mouse',
+    x: spawn.x,
+    y: spawn.y,
+    dx: spawn.dx,
+    dy: spawn.dy,
+    facingAngle: Math.atan2(spawn.dy, spawn.dx),
+    type: foodType,
     growthValue: isBad ? 0 : isGrub ? 1 : 3,
     swallowRadius: (isGrub ? 30 : 24) * renderScale,
+    expiresAt: getFoodExpiresAt(foodType, now),
     isBad: isBad,
     initialized: true,
+    enteringArena: true,
     pauseUntil: 0,
     nextTurnAt: Date.now() + 500 + Math.random() * 1300,
     fleeEnergy: mouseFleeStamina,
@@ -417,7 +445,7 @@ function generateFood(forceBad) {
 
 function getRandomFoodVelocity() {
   var angle = Math.random() * Math.PI * 2
-  var speed = (0.9 + Math.random() * 1.05) * motionScale
+  var speed = getRandomFoodSpeed()
 
   return {
     dx: Math.cos(angle) * speed,
@@ -437,17 +465,52 @@ function getRandomMouseVelocity() {
 
 function startFoodTimer() {
   stopFoodTimer()
-  foodSpawnIntervalId = window.setInterval(function () {
+
+  spawnTimedFood('grub')
+  foodSpawnIntervalIds.push(window.setInterval(function () {
     if (playing) {
-      foods.push(generateFood())
+      spawnTimedFood('grub')
     }
-  }, 15000)
+  }, grubSpawnInterval))
+
+  foodSpawnIntervalIds.push(window.setInterval(function () {
+    if (playing) {
+      spawnTimedFood('beetle')
+    }
+  }, beetleSpawnInterval))
+
+  foodSpawnIntervalIds.push(window.setInterval(function () {
+    if (playing) {
+      spawnTimedFood('mouse')
+    }
+  }, mouseSpawnInterval))
+}
+
+function spawnTimedFood(foodType) {
+  foods.push(generateFood(foodType))
 }
 
 function stopFoodTimer() {
-  if (foodSpawnIntervalId) {
-    window.clearInterval(foodSpawnIntervalId)
-    foodSpawnIntervalId = undefined
+  for (var i = 0; i < foodSpawnIntervalIds.length; i++) {
+    window.clearInterval(foodSpawnIntervalIds[i])
+  }
+
+  foodSpawnIntervalIds = []
+}
+
+function startBadSnakeTimer() {
+  stopBadSnakeTimer()
+  badSnakeSpawnIntervalId = window.setInterval(function () {
+    if (playing) {
+      spawnBadSnake()
+    }
+  }, badSnakeSpawnInterval)
+}
+
+function stopBadSnakeTimer() {
+  if (badSnakeSpawnIntervalId) {
+    window.clearInterval(badSnakeSpawnIntervalId)
+    badSnakeSpawnIntervalId = undefined
   }
 }
 
@@ -471,6 +534,7 @@ function animate() {
       foodRandom()
       updateFireball()
       moveSnakeHead()
+      updateBadSnakes()
 
       for (var i = 0; i < foods.length; i++) {
         var entitySwallowRadius = foods[i].swallowRadius || swallowRadius
@@ -503,7 +567,9 @@ function animate() {
             setHighScore(score)
           }
 
-          foods[i] = generateFood()
+          foods.splice(i, 1)
+          i--
+          continue
         }
 
         drawFood(foods[i])
@@ -533,13 +599,90 @@ function drawFood(food) {
   } else if (food.type === 'grub') {
     drawGrubFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
   } else {
-    drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
+    drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, isEntityMoving(food))
   }
+}
+
+function getFoodExpiresAt(foodType, now) {
+  if (foodType === 'grub') return now + grubLifetime
+  if (foodType === 'mouse') return now + mouseLifetime
+  return 0
+}
+
+function getRandomFoodSpeed() {
+  return (0.9 + Math.random() * 1.05) * motionScale
+}
+
+function getRandomGrubSpeed() {
+  return (0.22 + Math.random() * 0.38) * motionScale
+}
+
+function getOffscreenSpawn(speed, offset) {
+  var side = Math.floor(Math.random() * 4)
+  var startX
+  var startY
+
+  if (side === 0) {
+    startX = -offset
+    startY = Math.random() * canvas.height
+  } else if (side === 1) {
+    startX = canvas.width + offset
+    startY = Math.random() * canvas.height
+  } else if (side === 2) {
+    startX = Math.random() * canvas.width
+    startY = -offset
+  } else {
+    startX = Math.random() * canvas.width
+    startY = canvas.height + offset
+  }
+
+  var targetX = canvas.width * (0.25 + Math.random() * 0.5)
+  var targetY = canvas.height * (0.25 + Math.random() * 0.5)
+  var dx = targetX - startX
+  var dy = targetY - startY
+  var distance = Math.sqrt(dx * dx + dy * dy) || 1
+
+  return {
+    x: startX,
+    y: startY,
+    dx: dx / distance * speed,
+    dy: dy / distance * speed,
+  }
+}
+
+function sendEntityToNearestExit(entity) {
+  var exitOffset = 24 * renderScale
+  var exits = [
+    { x: -exitOffset, y: entity.y, distance: entity.x },
+    { x: canvas.width + exitOffset, y: entity.y, distance: canvas.width - entity.x },
+    { x: entity.x, y: -exitOffset, distance: entity.y },
+    { x: entity.x, y: canvas.height + exitOffset, distance: canvas.height - entity.y },
+  ]
+  var nearestExit = exits[0]
+
+  for (var i = 1; i < exits.length; i++) {
+    if (exits[i].distance < nearestExit.distance) {
+      nearestExit = exits[i]
+    }
+  }
+
+  var speed = entity.type === 'grub' ? getRandomGrubSpeed() * 1.3 : getRandomFoodSpeed()
+  var dx = nearestExit.x - entity.x
+  var dy = nearestExit.y - entity.y
+  var distance = Math.sqrt(dx * dx + dy * dy) || 1
+
+  entity.dx = dx / distance * speed
+  entity.dy = dy / distance * speed
+  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+  entity.leavingArena = true
+  entity.enteringArena = false
+  entity.expiresAt = 0
+  entity.pauseUntil = 0
 }
 
 function getRandomGrubVelocity() {
   var angle = Math.random() * Math.PI * 2
-  var speed = (0.22 + Math.random() * 0.38) * motionScale
+  var speed = getRandomGrubSpeed()
 
   return {
     dx: Math.cos(angle) * speed,
@@ -553,70 +696,133 @@ function isSnakeTouchingEntity(entity, radius) {
   return dx * dx + dy * dy < radius * radius
 }
 
-function drawGoodFood(centerX, centerY, angle) {
+function isEntityInsideArena(entity, padding) {
+  return (
+    entity.x >= padding &&
+    entity.x <= canvas.width - padding &&
+    entity.y >= padding &&
+    entity.y <= canvas.height - padding
+  )
+}
+
+function isEntityOutsideArena(entity, padding) {
+  return (
+    entity.x < -padding ||
+    entity.x > canvas.width + padding ||
+    entity.y < -padding ||
+    entity.y > canvas.height + padding
+  )
+}
+
+function isEntityMoving(entity) {
+  return entity.dx * entity.dx + entity.dy * entity.dy > 0.04
+}
+
+function drawGoodFood(centerX, centerY, angle, isMoving) {
+  var legStep = isMoving ? Math.sin(Date.now() * 0.026 + centerX * 0.04 + centerY * 0.03) * 1.2 : 0
+  var tailWiggle = isMoving ? Math.sin(Date.now() * 0.02 + centerX * 0.04) * 2.4 : 0
+
   ctx.save()
   ctx.translate(centerX, centerY)
   ctx.rotate(angle)
-  ctx.scale(renderScale, renderScale)
+  ctx.scale(renderScale * 1.14, renderScale * 1.14)
 
-  ctx.fillStyle = 'rgba(232, 209, 184, 0.18)'
+  ctx.fillStyle = 'rgba(232, 209, 184, 0.16)'
   ctx.beginPath()
-  ctx.ellipse(0, 0, 18, 11, 0, 0, Math.PI * 2)
+  ctx.ellipse(-1, 1, 18, 11, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.strokeStyle = '#c99b83'
-  ctx.lineWidth = 2.2
+  ctx.strokeStyle = '#cfa791'
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(-13, 2)
-  ctx.quadraticCurveTo(-23, 6, -28, 0)
-  ctx.quadraticCurveTo(-31, -4, -35, -2)
+  ctx.moveTo(-15, 1)
+  ctx.quadraticCurveTo(-24, 5 + tailWiggle, -31, tailWiggle * 0.35)
+  ctx.quadraticCurveTo(-36, -4 + tailWiggle, -39, -2)
   ctx.stroke()
 
-  ctx.fillStyle = '#9d8d83'
-  ctx.beginPath()
-  ctx.ellipse(-3, 0, 12, 7, 0, 0, Math.PI * 2)
-  ctx.fill()
+  drawMouseLegs(legStep)
 
-  ctx.fillStyle = '#c3b4aa'
+  ctx.fillStyle = '#8e8179'
+  ctx.strokeStyle = '#5b4e49'
+  ctx.lineWidth = 1.2
   ctx.beginPath()
-  ctx.ellipse(11, 0, 7, 5, 0, 0, Math.PI * 2)
+  ctx.ellipse(-5, 0, 13.5, 8.5, 0, 0, Math.PI * 2)
   ctx.fill()
+  ctx.stroke()
 
-  ctx.fillStyle = '#9d8d83'
-  ctx.beginPath()
-  ctx.arc(8, -5, 2.6, 0, Math.PI * 2)
-  ctx.arc(8, 5, 2.6, 0, Math.PI * 2)
-  ctx.fill()
-
-  ctx.fillStyle = '#e1c3bd'
-  ctx.beginPath()
-  ctx.arc(8, -5, 1.4, 0, Math.PI * 2)
-  ctx.arc(8, 5, 1.4, 0, Math.PI * 2)
-  ctx.fill()
-
-  ctx.fillStyle = '#2a1b18'
-  ctx.beginPath()
-  ctx.arc(16, 0, 1.2, 0, Math.PI * 2)
-  ctx.fill()
-
-  ctx.strokeStyle = '#d9cbc0'
+  ctx.fillStyle = '#b6aaa2'
+  ctx.strokeStyle = '#5b4e49'
   ctx.lineWidth = 1
   ctx.beginPath()
-  ctx.moveTo(15, -1)
-  ctx.lineTo(20, -3)
-  ctx.moveTo(15, 1)
-  ctx.lineTo(20, 3)
+  ctx.ellipse(9, 0, 8.5, 5.6, 0, 0, Math.PI * 2)
+  ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#7f7068'
+  ctx.fillStyle = '#8e8179'
+  ctx.strokeStyle = '#5b4e49'
+  ctx.lineWidth = 0.9
   ctx.beginPath()
-  ctx.ellipse(-5, -8, 2.2, 1.1, 0, 0, Math.PI * 2)
-  ctx.ellipse(2, -8, 2.2, 1.1, 0, 0, Math.PI * 2)
-  ctx.ellipse(-5, 8, 2.2, 1.1, 0, 0, Math.PI * 2)
-  ctx.ellipse(2, 8, 2.2, 1.1, 0, 0, Math.PI * 2)
+  ctx.arc(6.5, -5.2, 3, 0, Math.PI * 2)
+  ctx.arc(6.5, 5.2, 3, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#d9b9b1'
+  ctx.beginPath()
+  ctx.arc(6.9, -5.2, 1.45, 0, Math.PI * 2)
+  ctx.arc(6.9, 5.2, 1.45, 0, Math.PI * 2)
   ctx.fill()
 
+  ctx.fillStyle = '#1d1412'
+  ctx.beginPath()
+  ctx.arc(16.2, 0, 1.35, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = '#eadbd1'
+  ctx.lineWidth = 0.85
+  ctx.beginPath()
+  ctx.moveTo(13.5, -1.2)
+  ctx.lineTo(21, -4)
+  ctx.moveTo(13.5, -0.2)
+  ctx.lineTo(21, -1)
+  ctx.moveTo(13.5, 1.2)
+  ctx.lineTo(21, 4)
+  ctx.moveTo(13.5, 0.2)
+  ctx.lineTo(21, 1)
+  ctx.stroke()
+
   ctx.restore()
+}
+
+function drawMouseLegs(legStep) {
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = 'rgba(54, 39, 34, 0.88)'
+  ctx.lineWidth = 2.4
+  ctx.beginPath()
+  drawMouseLegPath(legStep)
+  ctx.stroke()
+
+  ctx.strokeStyle = '#cfa791'
+  ctx.lineWidth = 1.15
+  ctx.beginPath()
+  drawMouseLegPath(legStep)
+  ctx.stroke()
+}
+
+function drawMouseLegPath(legStep) {
+  ctx.moveTo(-10, -5.2)
+  ctx.lineTo(-13 - legStep, -7.8)
+  ctx.lineTo(-15.5 - legStep, -7.1)
+  ctx.moveTo(-1, -5.8)
+  ctx.lineTo(1.7 + legStep, -8.1)
+  ctx.lineTo(4.4 + legStep, -7.5)
+  ctx.moveTo(-10, 5.2)
+  ctx.lineTo(-13 + legStep, 7.8)
+  ctx.lineTo(-15.5 + legStep, 7.1)
+  ctx.moveTo(-1, 5.8)
+  ctx.lineTo(1.7 - legStep, 8.1)
+  ctx.lineTo(4.4 - legStep, 7.5)
 }
 
 function drawGrubFood(centerX, centerY, angle) {
@@ -679,8 +885,26 @@ function drawBadFood(centerX, centerY, angle, isBurning) {
   ctx.arc(0, 0, 18, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.strokeStyle = '#1b080f'
-  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = 'rgba(12, 5, 8, 0.72)'
+  ctx.lineWidth = 3.4
+  ctx.beginPath()
+  ctx.moveTo(-10, -8)
+  ctx.lineTo(-16, -13 + legStep)
+  ctx.moveTo(10, -8)
+  ctx.lineTo(16, -13 - legStep)
+  ctx.moveTo(-12, 0)
+  ctx.lineTo(-18, legStep)
+  ctx.moveTo(12, 0)
+  ctx.lineTo(18, -legStep)
+  ctx.moveTo(-9, 8)
+  ctx.lineTo(-15, 13 - legStep)
+  ctx.moveTo(9, 8)
+  ctx.lineTo(15, 13 + legStep)
+  ctx.stroke()
+
+  ctx.strokeStyle = '#dfff70'
+  ctx.lineWidth = 1.8
   ctx.beginPath()
   ctx.moveTo(-10, -8)
   ctx.lineTo(-16, -13 + legStep)
@@ -796,6 +1020,14 @@ function updateFireball() {
 
   var fireballEdgeSize = 18 * renderScale
 
+  if (fireball.enteringArena) {
+    if (isEntityInsideArena(fireball, fireballEdgeSize)) {
+      fireball.enteringArena = false
+    } else {
+      return
+    }
+  }
+
   applySnakeBodyBounce(fireball)
   applyRoundedArenaBounds(fireball, fireballEdgeSize)
 
@@ -813,15 +1045,15 @@ function updateFireball() {
 }
 
 function generateFireball() {
-  var velocity = getRandomFoodVelocity()
-  var fireballMargin = 40 * renderScale
+  var spawn = getOffscreenSpawn(getRandomFoodSpeed() * 1.12, 42 * renderScale)
 
   return {
-    x: fireballMargin / 2 + Math.random() * (canvas.width - fireballMargin),
-    y: fireballMargin / 2 + Math.random() * (canvas.height - fireballMargin),
-    dx: velocity.dx * 1.12,
-    dy: velocity.dy * 1.12,
-    facingAngle: Math.atan2(velocity.dy, velocity.dx),
+    x: spawn.x,
+    y: spawn.y,
+    dx: spawn.dx,
+    dy: spawn.dy,
+    facingAngle: Math.atan2(spawn.dy, spawn.dx),
+    enteringArena: true,
     expiresAt: Date.now() + fireballLifetime,
   }
 }
@@ -844,7 +1076,8 @@ function getActiveBeetleCount() {
 
 function burnPoisonBeetles() {
   var now = Date.now()
-  var burnedAny = false
+  var burnedBeetles = false
+  var burnedRivals = false
 
   for (var i = 0; i < foods.length; i++) {
     if (foods[i].isBad && !foods[i].isBurning) {
@@ -853,11 +1086,24 @@ function burnPoisonBeetles() {
       foods[i].dx = 0
       foods[i].dy = 0
       foods[i].pauseUntil = foods[i].burnUntil
-      burnedAny = true
+      burnedBeetles = true
     }
   }
 
-  if (burnedAny) {
+  for (var rivalIndex = 0; rivalIndex < badSnakes.length; rivalIndex++) {
+    if (!badSnakes[rivalIndex].isBurning) {
+      badSnakes[rivalIndex].isBurning = true
+      badSnakes[rivalIndex].burnUntil = now + beetleBurnDuration
+      badSnakes[rivalIndex].cutCooldownUntil = badSnakes[rivalIndex].burnUntil
+      burnedRivals = true
+    }
+  }
+
+  if (burnedRivals) {
+    playRivalSound('burn')
+  }
+
+  if (burnedBeetles) {
     playSound('goodFoodSound')
   }
 }
@@ -1064,9 +1310,15 @@ function updateBoostControlVisual(progress, state, forceUpdate) {
   var quantizedProgress = Math.round(clampedProgress * 20) / 20
 
   if (isMobileControlLayout()) {
-    if (!forceUpdate && state === lastBoostVisualState) return
+    if (!forceUpdate && !shouldUpdateBoostVisual(clampedProgress, state)) return
 
+    lastBoostVisualUpdateAt = Date.now()
+    lastBoostVisualProgress = clampedProgress
     lastBoostVisualState = state
+
+    for (var mobileGaugeIndex = 0; mobileGaugeIndex < boostControlGauges.length; mobileGaugeIndex++) {
+      boostControlGauges[mobileGaugeIndex].style.setProperty('--boost-progress', clampedProgress * 100 + '%')
+    }
 
     for (var mobileStateIndex = 0; mobileStateIndex < boostVisualStates.length; mobileStateIndex++) {
       boostVisualStates[mobileStateIndex].classList.toggle('is-active', state === 'active')
@@ -1096,7 +1348,7 @@ function shouldUpdateBoostVisual(progress, state) {
   var now = Date.now()
 
   if (state !== lastBoostVisualState) return true
-  if (Math.abs(progress - lastBoostVisualProgress) >= 0.05) return true
+  if (Math.abs(progress - lastBoostVisualProgress) >= 0.01) return true
   return now - lastBoostVisualUpdateAt >= boostVisualUpdateInterval
 }
 
@@ -1115,11 +1367,106 @@ function turnTowardAngle(current, target, amount) {
 }
 
 function playSound(id) {
+  if (id === 'goodFoodSound') {
+    playGameSound('eat')
+    return
+  }
+
+  if (id === 'badFoodSound') {
+    playGameSound('hurt')
+    return
+  }
+
   var sound = document.getElementById(id)
   if (!sound) return
 
   sound.currentTime = 0
   sound.play().catch(function () {})
+}
+
+function playGameSound(type) {
+  var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextConstructor) return
+
+  if (!gameAudioContext) {
+    gameAudioContext = new AudioContextConstructor()
+  }
+
+  gameAudioContext.resume().catch(function () {})
+
+  if (type === 'eat') {
+    playGameTone(260, 430, 0.1, 'sine', 0.15, 0)
+    playGameTone(390, 660, 0.12, 'triangle', 0.13, 0.045)
+    playGameTone(520, 780, 0.1, 'sine', 0.08, 0.105)
+  } else if (type === 'hurt') {
+    playGameTone(138, 44, 0.28, 'sawtooth', 0.22, 0)
+    playGameTone(78, 34, 0.22, 'triangle', 0.15, 0.035)
+    playGameTone(42, 28, 0.18, 'sine', 0.09, 0)
+  }
+}
+
+function playGameTone(startFrequency, endFrequency, duration, type, volume, delay) {
+  if (!gameAudioContext) return
+
+  var startAt = gameAudioContext.currentTime + delay
+  var oscillator = gameAudioContext.createOscillator()
+  var gain = gameAudioContext.createGain()
+
+  oscillator.type = type
+  oscillator.frequency.setValueAtTime(startFrequency, startAt)
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), startAt + duration)
+  gain.gain.setValueAtTime(0.0001, startAt)
+  gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.012)
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration)
+
+  oscillator.connect(gain)
+  gain.connect(gameAudioContext.destination)
+  oscillator.start(startAt)
+  oscillator.stop(startAt + duration + 0.03)
+}
+
+function playRivalSound(type) {
+  var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextConstructor) return
+
+  if (!rivalAudioContext) {
+    rivalAudioContext = new AudioContextConstructor()
+  }
+
+  rivalAudioContext.resume().catch(function () {})
+
+  if (type === 'bite') {
+    playRivalTone(150, 82, 0.16, 'sawtooth', 0.13)
+    playRivalTone(92, 58, 0.2, 'square', 0.06)
+  } else if (type === 'hurt') {
+    playRivalTone(520, 310, 0.12, 'triangle', 0.1)
+    playRivalTone(760, 420, 0.08, 'square', 0.045)
+  } else if (type === 'burn') {
+    playRivalTone(240, 54, 0.36, 'sawtooth', 0.11)
+    playRivalTone(118, 42, 0.28, 'square', 0.055)
+  } else {
+    playRivalTone(360, 190, 0.1, 'square', 0.06)
+  }
+}
+
+function playRivalTone(startFrequency, endFrequency, duration, type, volume) {
+  if (!rivalAudioContext) return
+
+  var now = rivalAudioContext.currentTime
+  var oscillator = rivalAudioContext.createOscillator()
+  var gain = rivalAudioContext.createGain()
+
+  oscillator.type = type
+  oscillator.frequency.setValueAtTime(startFrequency, now)
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), now + duration)
+  gain.gain.setValueAtTime(0.0001, now)
+  gain.gain.exponentialRampToValueAtTime(volume, now + 0.012)
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+  oscillator.connect(gain)
+  gain.connect(rivalAudioContext.destination)
+  oscillator.start(now)
+  oscillator.stop(now + duration + 0.03)
 }
 
 function updateHighScore(nextScore) {
@@ -1143,21 +1490,481 @@ function setHighScore(nextScore) {
   } catch {}
 }
 
+function spawnBadSnakes() {
+  badSnakes = []
+
+  for (var i = 0; i < badSnakeStartCount; i++) {
+    spawnBadSnake()
+  }
+}
+
+function spawnBadSnake() {
+  if (badSnakes.length >= badSnakeMaxCount) return
+
+  badSnakes.push(createBadSnake(badSnakes.length))
+}
+
+function createBadSnake(index) {
+  var margin = 54 * renderScale
+  var side = index % 4
+  var headX
+  var headY
+
+  if (side === 0) {
+    headX = margin
+    headY = margin
+  } else if (side === 1) {
+    headX = canvas.width - margin
+    headY = canvas.height - margin
+  } else if (side === 2) {
+    headX = canvas.width - margin
+    headY = margin
+  } else {
+    headX = margin
+    headY = canvas.height - margin
+  }
+
+  var heading = Math.atan2(canvas.height / 2 - headY, canvas.width / 2 - headX)
+  var enemySnake = {
+    head: { x: headX, y: headY },
+    heading: heading,
+    segments: [],
+    wanderAngle: heading,
+    nextWanderAt: 0,
+    cutCooldownUntil: 0,
+    palette: index % 2 === 0
+      ? { head: '#431b1f', body: '#7a2d32', stripe: '#ffb657' }
+      : { head: '#2a2438', body: '#5a375d', stripe: '#b6ff70' },
+  }
+
+  for (var i = 0; i < badSnakeStartSegments; i++) {
+    enemySnake.segments.push({
+      x: headX - Math.cos(heading) * segLength * (i + 1),
+      y: headY - Math.sin(heading) * segLength * (i + 1),
+    })
+  }
+
+  return enemySnake
+}
+
+function updateBadSnakes() {
+  for (var i = 0; i < badSnakes.length; i++) {
+    var enemySnake = badSnakes[i]
+
+    if (enemySnake.isBurning) {
+      if (Date.now() >= enemySnake.burnUntil) {
+        removeBadSnake(enemySnake)
+        i--
+        continue
+      }
+
+      drawBadSnake(enemySnake)
+      continue
+    }
+
+    updateBadSnake(enemySnake)
+    handleBadSnakeFood(enemySnake)
+    handleBadSnakeCuts(enemySnake)
+
+    if (badSnakes.indexOf(enemySnake) === -1) {
+      i--
+      continue
+    }
+
+    drawBadSnake(enemySnake)
+  }
+}
+
+function updateBadSnake(enemySnake) {
+  var target = getBadSnakeTarget(enemySnake)
+  var now = Date.now()
+
+  if (target) {
+    var targetAngle = Math.atan2(target.y - enemySnake.head.y, target.x - enemySnake.head.x)
+    enemySnake.heading = turnTowardAngle(enemySnake.heading, targetAngle, badSnakeTurnRate)
+  } else {
+    if (now >= enemySnake.nextWanderAt) {
+      enemySnake.wanderAngle += -0.75 + Math.random() * 1.5
+      enemySnake.nextWanderAt = now + 900 + Math.random() * 1600
+    }
+
+    enemySnake.heading = turnTowardAngle(enemySnake.heading, enemySnake.wanderAngle, badSnakeTurnRate * 0.75)
+  }
+
+  var edgeVector = getEdgeAvoidanceVector(enemySnake.head)
+  if (edgeVector.x || edgeVector.y) {
+    var edgeAngle = Math.atan2(edgeVector.y, edgeVector.x)
+    enemySnake.heading = turnTowardAngle(enemySnake.heading, edgeAngle, badSnakeTurnRate * 1.35)
+  }
+
+  var speed = getBadSnakeSpeed(enemySnake)
+  var enemyVelocity = {
+    x: enemySnake.head.x,
+    y: enemySnake.head.y,
+    dx: Math.cos(enemySnake.heading) * speed,
+    dy: Math.sin(enemySnake.heading) * speed,
+    facingAngle: enemySnake.heading,
+  }
+
+  enemyVelocity.x += enemyVelocity.dx
+  enemyVelocity.y += enemyVelocity.dy
+  applyRoundedArenaBounds(enemyVelocity, 0)
+
+  if (enemyVelocity.x < 0 || enemyVelocity.x > canvas.width) {
+    enemyVelocity.dx *= -1
+    enemyVelocity.x = Math.max(0, Math.min(canvas.width, enemyVelocity.x))
+  }
+
+  if (enemyVelocity.y < 0 || enemyVelocity.y > canvas.height) {
+    enemyVelocity.dy *= -1
+    enemyVelocity.y = Math.max(0, Math.min(canvas.height, enemyVelocity.y))
+  }
+
+  enemySnake.head.x = enemyVelocity.x
+  enemySnake.head.y = enemyVelocity.y
+  enemySnake.heading = Math.atan2(enemyVelocity.dy, enemyVelocity.dx)
+  dragBadSnakeSegments(enemySnake)
+}
+
+function getBadSnakeSpeed(enemySnake) {
+  var enemyExtraLength = Math.max(0, enemySnake.segments.length - badSnakeStartSegments)
+  var playerExtraLength = Math.max(0, n - startingSegments)
+  var lengthSpeed = enemyExtraLength * badSnakeSpeedPerSegment
+  var playerPressureSpeed = playerExtraLength * badSnakePlayerSpeedPerSegment
+
+  return Math.min(badSnakeMaxSpeed, (badSnakeBaseSpeed + lengthSpeed + playerPressureSpeed) * motionScale)
+}
+
+function getBadSnakeTarget(enemySnake) {
+  var closestFood
+  var closestDistanceSquared = Infinity
+
+  for (var i = 0; i < foods.length; i++) {
+    if (foods[i].isBad || foods[i].isBurning) continue
+
+    var dxToFood = foods[i].x - enemySnake.head.x
+    var dyToFood = foods[i].y - enemySnake.head.y
+    var distanceSquared = dxToFood * dxToFood + dyToFood * dyToFood
+
+    if (distanceSquared < closestDistanceSquared) {
+      closestFood = foods[i]
+      closestDistanceSquared = distanceSquared
+    }
+  }
+
+  var playerTarget = getPlayerSideAttackTarget(enemySnake)
+  var dxToPlayer = playerTarget.x - enemySnake.head.x
+  var dyToPlayer = playerTarget.y - enemySnake.head.y
+  var playerDistanceSquared = dxToPlayer * dxToPlayer + dyToPlayer * dyToPlayer
+
+  if (!closestFood || playerDistanceSquared < closestDistanceSquared) {
+    return playerTarget
+  }
+
+  return closestFood
+}
+
+function getPlayerSideAttackTarget(enemySnake) {
+  var bodyIndex = Math.min(Math.max(2, Math.floor(x.length * 0.38)), x.length - 1)
+  var baseX = x[bodyIndex] || snakeHead.x
+  var baseY = y[bodyIndex] || snakeHead.y
+  var sideOffset = 22 * renderScale
+  var sideX = -Math.sin(headingAngle)
+  var sideY = Math.cos(headingAngle)
+  var leftTarget = {
+    x: baseX + sideX * sideOffset,
+    y: baseY + sideY * sideOffset,
+  }
+  var rightTarget = {
+    x: baseX - sideX * sideOffset,
+    y: baseY - sideY * sideOffset,
+  }
+  var leftDx = leftTarget.x - enemySnake.head.x
+  var leftDy = leftTarget.y - enemySnake.head.y
+  var rightDx = rightTarget.x - enemySnake.head.x
+  var rightDy = rightTarget.y - enemySnake.head.y
+  var leftDistanceSquared = leftDx * leftDx + leftDy * leftDy
+  var rightDistanceSquared = rightDx * rightDx + rightDy * rightDy
+
+  return leftDistanceSquared < rightDistanceSquared ? leftTarget : rightTarget
+}
+
+function dragBadSnakeSegments(enemySnake) {
+  var leadX = enemySnake.head.x
+  var leadY = enemySnake.head.y
+  var enemySegLength = segLength * 0.94
+
+  for (var i = 0; i < enemySnake.segments.length; i++) {
+    var segment = enemySnake.segments[i]
+    var dx = leadX - segment.x
+    var dy = leadY - segment.y
+    var angle = Math.atan2(dy, dx)
+
+    segment.x = leadX - Math.cos(angle) * enemySegLength
+    segment.y = leadY - Math.sin(angle) * enemySegLength
+    leadX = segment.x
+    leadY = segment.y
+  }
+}
+
+function handleBadSnakeFood(enemySnake) {
+  for (var i = 0; i < foods.length; i++) {
+    if (foods[i].isBad || foods[i].isBurning) continue
+
+    var eatRadius = foods[i].swallowRadius || swallowRadius
+    if (!arePointsTouching(enemySnake.head.x, enemySnake.head.y, foods[i].x, foods[i].y, eatRadius)) continue
+
+    growBadSnake(enemySnake, foods[i].growthValue || 1)
+    foods.splice(i, 1)
+    i--
+    playRivalSound('feed')
+    break
+  }
+}
+
+function growBadSnake(enemySnake, count) {
+  var tail = enemySnake.segments[enemySnake.segments.length - 1] || enemySnake.head
+
+  for (var i = 0; i < count; i++) {
+    enemySnake.segments.push({ x: tail.x, y: tail.y })
+  }
+}
+
+function handleBadSnakeCuts(enemySnake) {
+  var now = Date.now()
+
+  if (now >= enemySnake.cutCooldownUntil) {
+    var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale)
+
+    if (playerHitIndex >= 0) {
+      var stolenPlayerSegments = removePlayerSegments(snakeBiteSegments)
+      if (stolenPlayerSegments) {
+        growBadSnake(enemySnake, stolenPlayerSegments)
+      }
+
+      enemySnake.cutCooldownUntil = now + snakeCutCooldown
+      playGameSound('hurt')
+      return
+    }
+  }
+
+  if (now < enemySnake.cutCooldownUntil) return
+
+  var enemyHitIndex = getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 15 * renderScale)
+
+  if (enemyHitIndex >= 0) {
+    var recoveredSegments = removeBadSnakeSegments(enemySnake, snakeBiteSegments)
+    addPlayerSegments(recoveredSegments)
+    enemySnake.cutCooldownUntil = now + snakeCutCooldown
+    playGameSound('eat')
+  }
+}
+
+function getPlayerBodyHitIndex(pointX, pointY, radius) {
+  for (var i = 2; i < x.length; i++) {
+    if (arePointsTouching(pointX, pointY, x[i], y[i], radius)) return i
+  }
+
+  return -1
+}
+
+function getEnemyBodyHitIndex(enemySnake, pointX, pointY, radius) {
+  for (var i = 0; i < enemySnake.segments.length; i++) {
+    var segment = enemySnake.segments[i]
+    if (arePointsTouching(pointX, pointY, segment.x, segment.y, radius)) return i
+  }
+
+  return -1
+}
+
+function removePlayerSegments(count) {
+  if (n <= startingSegments) return 0
+
+  var removedSegments = Math.min(count, n - startingSegments)
+
+  n -= removedSegments
+  x.splice(n)
+  y.splice(n)
+  score = Math.max(0, score - removedSegments)
+  document.getElementById('score').innerHTML = score
+
+  return removedSegments
+}
+
+function removeBadSnakeSegments(enemySnake, count) {
+  if (enemySnake.segments.length <= 0) return 0
+
+  var removedSegments = Math.min(count, enemySnake.segments.length)
+
+  enemySnake.segments.splice(enemySnake.segments.length - removedSegments, removedSegments)
+
+  if (enemySnake.segments.length === 0) {
+    removeBadSnake(enemySnake)
+  }
+
+  return removedSegments
+}
+
+function removeBadSnake(enemySnake) {
+  var index = badSnakes.indexOf(enemySnake)
+  if (index >= 0) {
+    badSnakes.splice(index, 1)
+  }
+}
+
+function addPlayerSegments(count) {
+  if (count <= 0) return
+
+  n += count
+  score += count
+  document.getElementById('score').innerHTML = score
+  addSnakeSegments(count)
+  updateHighScore(score)
+}
+
+function drawBadSnake(enemySnake) {
+  drawBadCentipedeSegment(enemySnake.head.x, enemySnake.head.y, enemySnake.heading, true, enemySnake.palette, 0, enemySnake.isBurning)
+
+  for (var i = 0; i < enemySnake.segments.length; i++) {
+    var segment = enemySnake.segments[i]
+    var leader = i === 0 ? enemySnake.head : enemySnake.segments[i - 1]
+    var angle = Math.atan2(leader.y - segment.y, leader.x - segment.x)
+    drawBadCentipedeSegment(segment.x, segment.y, angle, false, enemySnake.palette, i + 1, enemySnake.isBurning)
+  }
+}
+
+function drawBadCentipedeSegment(posX, posY, angle, isHead, palette, segmentIndex, isBurning) {
+  var now = Date.now()
+  var walkPhase = isBurning ? 0 : Math.sin(now * 0.016 + segmentIndex * 0.85)
+  var flameStep = Math.sin(now * 0.032 + segmentIndex * 0.7) * 2
+  var legReach = isHead ? 10 : 12
+  var legLift = walkPhase * 3
+
+  ctx.save()
+  ctx.translate(posX, posY)
+  ctx.rotate(angle)
+  ctx.scale(renderScale, renderScale)
+
+  ctx.strokeStyle = 'rgba(12, 5, 8, 0.74)'
+  ctx.lineWidth = 3.2
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-4, -6)
+  ctx.lineTo(-10 - legLift, -legReach)
+  ctx.moveTo(2, -6)
+  ctx.lineTo(9 + legLift, -legReach)
+  ctx.moveTo(-4, 6)
+  ctx.lineTo(-10 + legLift, legReach)
+  ctx.moveTo(2, 6)
+  ctx.lineTo(9 - legLift, legReach)
+  ctx.stroke()
+
+  ctx.strokeStyle = palette.stripe
+  ctx.lineWidth = 1.8
+  ctx.beginPath()
+  ctx.moveTo(-4, -6)
+  ctx.lineTo(-10 - legLift, -legReach)
+  ctx.moveTo(2, -6)
+  ctx.lineTo(9 + legLift, -legReach)
+  ctx.moveTo(-4, 6)
+  ctx.lineTo(-10 + legLift, legReach)
+  ctx.moveTo(2, 6)
+  ctx.lineTo(9 - legLift, legReach)
+  ctx.stroke()
+
+  ctx.fillStyle = isHead ? palette.head : palette.body
+  ctx.strokeStyle = '#1a0d12'
+  ctx.lineWidth = 1.6
+  ctx.beginPath()
+  ctx.ellipse(0, 0, isHead ? 13 : 10.5, isHead ? 8.5 : 7.5, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.strokeStyle = palette.stripe
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.moveTo(-6, -2.5)
+  ctx.quadraticCurveTo(0, 2, 7, -1.5)
+  ctx.moveTo(-6, 2.5)
+  ctx.quadraticCurveTo(0, -2, 7, 1.5)
+  ctx.stroke()
+
+  if (isHead) {
+    ctx.fillStyle = '#ffd2a1'
+    ctx.beginPath()
+    ctx.arc(5, -3.5, 1.5, 0, Math.PI * 2)
+    ctx.arc(5, 3.5, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.strokeStyle = palette.stripe
+    ctx.lineWidth = 1.1
+    ctx.beginPath()
+    ctx.moveTo(10, -4)
+    ctx.lineTo(15, -8)
+    ctx.moveTo(10, 4)
+    ctx.lineTo(15, 8)
+    ctx.stroke()
+  }
+
+  if (isBurning) {
+    drawCentipedeFlames(segmentIndex, flameStep)
+  }
+
+  ctx.restore()
+}
+
+function drawCentipedeFlames(segmentIndex, flameStep) {
+  ctx.fillStyle = 'rgba(255, 116, 35, 0.2)'
+  ctx.beginPath()
+  ctx.arc(0, 0, 15 + flameStep, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#ff6f21'
+  ctx.strokeStyle = '#ffe36c'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.moveTo(-8, 5)
+  ctx.bezierCurveTo(-13, 0, -8, -9 - flameStep, -3, -5)
+  ctx.bezierCurveTo(-1, -14, 5, -10, 3, -4)
+  ctx.bezierCurveTo(10, -9, 13, 0, 8, 5)
+  ctx.bezierCurveTo(4, 9, -4, 9, -8, 5)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#ffe76a'
+  ctx.beginPath()
+  ctx.moveTo(-2, 4)
+  ctx.bezierCurveTo(-5, 0, -2, -6, 1, -3)
+  ctx.bezierCurveTo(5, -6, 7, 1, 3, 5)
+  ctx.bezierCurveTo(1, 7, -1, 6, -2, 4)
+  ctx.fill()
+}
+
+function arePointsTouching(ax, ay, bx, by, radius) {
+  var dx = ax - bx
+  var dy = ay - by
+  return dx * dx + dy * dy <= radius * radius
+}
+
 function drawSnake(posX, posY) {
   dragSegment(0, posX, posY)
 
   for (var i = 0; i < x.length - 1; i++) {
-    dragSegment(i + 1, x[i], y[i])
+    dragSegment(i + 1, x[i], y[i], i < x.length - 2)
   }
+
+  drawSnakeTail()
 }
 
-function dragSegment(i, xin, yin) {
+function dragSegment(i, xin, yin, shouldDraw) {
   var dx = xin - x[i]
   var dy = yin - y[i]
   var angle = Math.atan2(dy, dx)
 
   x[i] = xin - Math.cos(angle) * segLength
   y[i] = yin - Math.sin(angle) * segLength
+
+  if (shouldDraw === false) return
 
   ctx.save()
   ctx.translate(x[i], y[i])
@@ -1176,6 +1983,9 @@ function dragSegment(i, xin, yin) {
       segmentWidth,
       segmentHeight
     )
+    if (i === 0) {
+      drawSnakeFace(segmentWidth, segmentHeight)
+    }
     ctx.restore()
     return
   }
@@ -1192,8 +2002,114 @@ function dragSegment(i, xin, yin) {
   ctx.arc(0, 0, segLength / 2, 0, Math.PI * 2)
   ctx.fill()
 
+  if (i === 0) {
+    drawSnakeFace(28 * renderScale, 46 * renderScale)
+  }
+
   ctx.rotate(-Math.PI / 2)
   drawLine(0, 0, segLength, 0, segColor, 10)
+
+  ctx.restore()
+}
+
+function drawSnakeFace(segmentWidth, segmentHeight) {
+  var faceScale = renderScale
+  var eyeY = -segmentHeight * 0.2
+  var eyeX = segmentWidth * 0.18
+  var tongueCycle = Date.now() % 1800
+  var tongueVisible = tongueCycle < 520
+
+  ctx.save()
+  ctx.lineCap = 'round'
+
+  if (tongueVisible) {
+    var tongueReach = (8 + Math.sin(tongueCycle / 520 * Math.PI) * 7) * faceScale
+    var tongueStartY = -segmentHeight * 0.48
+    var tongueEndY = tongueStartY - tongueReach
+
+    ctx.strokeStyle = '#ff4a63'
+    ctx.lineWidth = 1.7 * faceScale
+    ctx.beginPath()
+    ctx.moveTo(0, tongueStartY)
+    ctx.quadraticCurveTo(1.5 * faceScale, tongueStartY - tongueReach * 0.45, 0, tongueEndY)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(0, tongueEndY)
+    ctx.lineTo(-4 * faceScale, tongueEndY - 4 * faceScale)
+    ctx.moveTo(0, tongueEndY)
+    ctx.lineTo(4 * faceScale, tongueEndY - 4 * faceScale)
+    ctx.stroke()
+  }
+
+  ctx.fillStyle = '#1a1409'
+  ctx.strokeStyle = '#3a2409'
+  ctx.lineWidth = 0.8 * faceScale
+  ctx.beginPath()
+  ctx.ellipse(-eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, -0.15, 0, Math.PI * 2)
+  ctx.ellipse(eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, 0.15, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#050403'
+  ctx.beginPath()
+  ctx.arc(-eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
+  ctx.arc(eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+  ctx.beginPath()
+  ctx.arc(-eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
+  ctx.arc(eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.restore()
+}
+
+function drawSnakeTail() {
+  if (x.length < 2) return
+
+  var tailIndex = x.length - 1
+  var beforeTailIndex = tailIndex - 1
+  var tailAngle = Math.atan2(y[tailIndex] - y[beforeTailIndex], x[tailIndex] - x[beforeTailIndex])
+  var tailX = x[tailIndex] + Math.cos(tailAngle) * 8 * renderScale
+  var tailY = y[tailIndex] + Math.sin(tailAngle) * 8 * renderScale
+
+  ctx.save()
+  ctx.translate(tailX, tailY)
+  ctx.rotate(tailAngle)
+  ctx.scale(renderScale, renderScale)
+
+  ctx.beginPath()
+  ctx.moveTo(-12, -11)
+  ctx.quadraticCurveTo(3, -8, 16, 0)
+  ctx.quadraticCurveTo(3, 8, -12, 11)
+  ctx.quadraticCurveTo(-7, 4, -7, -4)
+  ctx.closePath()
+
+  var bodyImageReady = wormBodyImage.complete && wormBodyImage.naturalWidth > 0
+
+  if (bodyImageReady) {
+    ctx.save()
+    ctx.clip()
+    ctx.rotate(Math.PI / 2)
+    ctx.drawImage(wormBodyImage, -17, -13, 34, 26)
+    ctx.restore()
+  } else {
+    ctx.fillStyle = '#e4c84c'
+    ctx.fill()
+  }
+
+  ctx.strokeStyle = '#7c5f12'
+  ctx.lineWidth = 1.2
+  ctx.stroke()
+
+  ctx.strokeStyle = '#14110a'
+  ctx.lineWidth = 2.2
+  ctx.beginPath()
+  ctx.moveTo(-9, 0)
+  ctx.quadraticCurveTo(2, -1.6, 12, 0)
+  ctx.stroke()
 
   ctx.restore()
 }
@@ -1218,9 +2134,15 @@ function resetSnakeBody() {
 
 function foodRandom() {
   for (var i = 0; i < foods.length; i++) {
+    if (foods[i].expiresAt && Date.now() >= foods[i].expiresAt && !foods[i].leavingArena) {
+      sendEntityToNearestExit(foods[i])
+    }
+
     if (foods[i].isBurning) {
       if (Date.now() >= foods[i].burnUntil) {
-        foods[i] = generateFood(false)
+        foods.splice(i, 1)
+        i--
+        continue
       } else {
         foods[i].dx = 0
         foods[i].dy = 0
@@ -1229,20 +2151,21 @@ function foodRandom() {
     }
 
     if (!foods[i].initialized) {
-      foods[i].x = Math.random() * canvas.width
-      foods[i].y = Math.random() * canvas.height
-      var velocity = getRandomFoodVelocity()
-      foods[i].dx = velocity.dx
-      foods[i].dy = velocity.dy
-      foods[i].facingAngle = Math.atan2(velocity.dy, velocity.dx)
+      var spawn = getOffscreenSpawn(getRandomFoodSpeed(), 24 * renderScale)
+      foods[i].x = spawn.x
+      foods[i].y = spawn.y
+      foods[i].dx = spawn.dx
+      foods[i].dy = spawn.dy
+      foods[i].facingAngle = Math.atan2(spawn.dy, spawn.dx)
       foods[i].pauseUntil = 0
       foods[i].nextTurnAt = Date.now() + 500 + Math.random() * 1300
       foods[i].fleeEnergy = mouseFleeStamina
       foods[i].lastMouseUpdateAt = Date.now()
       foods[i].initialized = true
+      foods[i].enteringArena = true
     }
 
-    if (foods[i].type === 'mouse') {
+    if (foods[i].type === 'mouse' && !foods[i].enteringArena && !foods[i].leavingArena) {
       updateMouseMovement(foods[i])
     }
 
@@ -1250,6 +2173,27 @@ function foodRandom() {
     foods[i].y += foods[i].dy
 
     var foodEdgeSize = 13 * renderScale
+
+    if (foods[i].leavingArena) {
+      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+
+      if (isEntityOutsideArena(foods[i], foodEdgeSize + 18 * renderScale)) {
+        foods.splice(i, 1)
+        i--
+      }
+
+      continue
+    }
+
+    if (foods[i].enteringArena) {
+      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+
+      if (isEntityInsideArena(foods[i], foodEdgeSize)) {
+        foods[i].enteringArena = false
+      } else {
+        continue
+      }
+    }
 
     applySnakeBodyBounce(foods[i])
     applyRoundedArenaBounds(foods[i], foodEdgeSize)
