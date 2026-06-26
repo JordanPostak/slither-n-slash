@@ -1316,8 +1316,9 @@ function updateBoostControlVisual(progress, state, forceUpdate) {
     lastBoostVisualProgress = clampedProgress
     lastBoostVisualState = state
 
+    var mobileGaugeScale = 0.18 + clampedProgress * 0.82
     for (var mobileGaugeIndex = 0; mobileGaugeIndex < boostControlGauges.length; mobileGaugeIndex++) {
-      boostControlGauges[mobileGaugeIndex].style.setProperty('--boost-progress', clampedProgress * 100 + '%')
+      boostControlGauges[mobileGaugeIndex].style.setProperty('--boost-scale', mobileGaugeScale)
     }
 
     for (var mobileStateIndex = 0; mobileStateIndex < boostVisualStates.length; mobileStateIndex++) {
@@ -1334,8 +1335,9 @@ function updateBoostControlVisual(progress, state, forceUpdate) {
   lastBoostVisualProgress = quantizedProgress
   lastBoostVisualState = state
 
+  var gaugeScale = 0.18 + quantizedProgress * 0.82
   for (var i = 0; i < boostControlGauges.length; i++) {
-    boostControlGauges[i].style.setProperty('--boost-progress', quantizedProgress * 100 + '%')
+    boostControlGauges[i].style.setProperty('--boost-scale', gaugeScale)
   }
 
   for (var j = 0; j < boostVisualStates.length; j++) {
