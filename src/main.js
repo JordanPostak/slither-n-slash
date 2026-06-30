@@ -63,6 +63,10 @@ var wormHeadImage = new Image()
 var wormBodyImage = new Image()
 var gameAudioContext
 var rivalAudioContext
+var scoreElement = document.getElementById('score')
+var highScoreElement = document.getElementById('high-score')
+var highScore = getHighScore()
+var highScoreSaveTimer
 var controlsReady = false
 var mobileControls = {
   left: false,
@@ -109,6 +113,7 @@ var snakeGamePanel = document.querySelector('.snake-game-panel')
 
 playSnakeGameBtn.addEventListener('click', function () {
   if (!playing) {
+    prepareGameAudio()
     playing = true
     playSnakeGameBtn.innerText = 'Pause'
     document.body.classList.add('is-playing')
@@ -158,7 +163,7 @@ function init() {
     }
   }
 
-  document.getElementById('high-score').innerHTML = getHighScore()
+  updateHighScoreDisplay()
 
   if (!nextFireballSpawnAt) {
     scheduleNextFireball()
@@ -552,19 +557,19 @@ function animate() {
             y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
             resetSnakeBody()
             score = 0
-            document.getElementById('score').innerHTML = score
+            updateScoreDisplay()
             playSound('badFoodSound')
           } else {
             var growthValue = foods[i].growthValue || 1
 
             n += growthValue
             score += growthValue
-            document.getElementById('score').innerHTML = score
+            updateScoreDisplay()
             addSnakeSegments(growthValue)
             playSound('goodFoodSound')
           }
 
-          if (score > getHighScore()) {
+          if (score > highScore) {
             setHighScore(score)
           }
 
@@ -586,7 +591,6 @@ function animate() {
         }
       }
 
-      document.getElementById('high-score').innerHTML = getHighScore()
       drawSnake(snakeHead.x, snakeHead.y)
     }
 
@@ -1388,12 +1392,8 @@ function playSound(id) {
 }
 
 function playGameSound(type) {
-  var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
-  if (!AudioContextConstructor) return
-
-  if (!gameAudioContext) {
-    gameAudioContext = new AudioContextConstructor()
-  }
+  prepareGameAudio()
+  if (!gameAudioContext) return
 
   gameAudioContext.resume().catch(function () {})
 
@@ -1406,6 +1406,17 @@ function playGameSound(type) {
     playGameTone(78, 34, 0.22, 'triangle', 0.15, 0.035)
     playGameTone(42, 28, 0.18, 'sine', 0.09, 0)
   }
+}
+
+function prepareGameAudio() {
+  if (gameAudioContext) return
+
+  var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextConstructor) return
+
+  gameAudioContext = new AudioContextConstructor()
+  rivalAudioContext = gameAudioContext
+  gameAudioContext.resume().catch(function () {})
 }
 
 function playGameTone(startFrequency, endFrequency, duration, type, volume, delay) {
@@ -1429,12 +1440,8 @@ function playGameTone(startFrequency, endFrequency, duration, type, volume, dela
 }
 
 function playRivalSound(type) {
-  var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
-  if (!AudioContextConstructor) return
-
-  if (!rivalAudioContext) {
-    rivalAudioContext = new AudioContextConstructor()
-  }
+  prepareGameAudio()
+  if (!rivalAudioContext) return
 
   rivalAudioContext.resume().catch(function () {})
 
@@ -1473,7 +1480,7 @@ function playRivalTone(startFrequency, endFrequency, duration, type, volume) {
 }
 
 function updateHighScore(nextScore) {
-  if (nextScore > getHighScore()) {
+  if (nextScore > highScore) {
     setHighScore(nextScore)
   }
 }
@@ -1488,10 +1495,35 @@ function getHighScore() {
 }
 
 function setHighScore(nextScore) {
+  if (nextScore <= highScore) return
+
+  highScore = nextScore
+  updateHighScoreDisplay()
+
+  window.clearTimeout(highScoreSaveTimer)
+  highScoreSaveTimer = window.setTimeout(persistHighScore, 250)
+}
+
+function updateScoreDisplay() {
+  if (scoreElement) scoreElement.textContent = score
+}
+
+function updateHighScoreDisplay() {
+  if (highScoreElement) highScoreElement.textContent = highScore
+}
+
+function persistHighScore() {
+  window.clearTimeout(highScoreSaveTimer)
+  highScoreSaveTimer = undefined
+
   try {
-    localStorage.setItem('high-score', nextScore)
+    localStorage.setItem('high-score', highScore)
   } catch {}
 }
+
+window.addEventListener('pagehide', function () {
+  if (highScoreSaveTimer) persistHighScore()
+})
 
 function spawnBadSnakes() {
   badSnakes = []
@@ -1794,7 +1826,7 @@ function removePlayerSegments(count) {
   x.splice(n)
   y.splice(n)
   score = Math.max(0, score - removedSegments)
-  document.getElementById('score').innerHTML = score
+  updateScoreDisplay()
 
   return removedSegments
 }
@@ -1825,7 +1857,7 @@ function addPlayerSegments(count) {
 
   n += count
   score += count
-  document.getElementById('score').innerHTML = score
+  updateScoreDisplay()
   addSnakeSegments(count)
   updateHighScore(score)
 }
