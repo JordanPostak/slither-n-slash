@@ -54,6 +54,7 @@ var turnRate = 0.065
 var gamepadSteerAngleTarget
 var gamepadBoosting = false
 var gamepadDeadzone = 0.2
+var gamepadMenuButtonPressed = false
 var animationRequestId
 var foodSpawnIntervalIds = []
 var playing = false
@@ -125,7 +126,9 @@ window.addEventListener('resize', function () {
 var playSnakeGameBtn = document.querySelector('.play-snake-game-btn')
 var snakeGamePanel = document.querySelector('.snake-game-panel')
 
-playSnakeGameBtn.addEventListener('click', function () {
+playSnakeGameBtn.addEventListener('click', toggleGamePlayback)
+
+function toggleGamePlayback() {
   if (!playing) {
     prepareGameAudio()
     playing = true
@@ -142,7 +145,7 @@ playSnakeGameBtn.addEventListener('click', function () {
     stopBadSnakeTimer()
     resetBoost()
   }
-})
+}
 
 function resizeCanvas() {
   var rect = gameStage.getBoundingClientRect()
@@ -199,6 +202,7 @@ function init() {
 
 function setupControls() {
   setupTouchJoystick()
+  requestAnimationFrame(updateGamepadPauseControl)
 
   window.addEventListener('keydown', function (evt) {
     if (evt.key === 'Shift' || evt.key === ' ') {
@@ -247,15 +251,7 @@ function setupControls() {
 function updateGamepadControls() {
   if (!navigator.getGamepads) return
 
-  var gamepads = navigator.getGamepads()
-  var gamepad
-
-  for (var i = 0; i < gamepads.length; i++) {
-    if (gamepads[i] && gamepads[i].connected) {
-      gamepad = gamepads[i]
-      break
-    }
-  }
+  var gamepad = getActiveGamepad()
 
   if (!gamepad) {
     releaseGamepadControls()
@@ -275,6 +271,33 @@ function updateGamepadControls() {
 
   var boostButton = gamepad.buttons[0]
   gamepadBoosting = Boolean(boostButton && (boostButton.pressed || boostButton.value > 0.5))
+}
+
+function updateGamepadPauseControl() {
+  var gamepad = getActiveGamepad()
+  var menuButton = gamepad && gamepad.buttons[9]
+  var menuButtonPressed = Boolean(
+    menuButton && (menuButton.pressed || menuButton.value > 0.5)
+  )
+
+  if (menuButtonPressed && !gamepadMenuButtonPressed) {
+    toggleGamePlayback()
+  }
+
+  gamepadMenuButtonPressed = menuButtonPressed
+  requestAnimationFrame(updateGamepadPauseControl)
+}
+
+function getActiveGamepad() {
+  if (!navigator.getGamepads) return
+
+  var gamepads = navigator.getGamepads()
+
+  for (var i = 0; i < gamepads.length; i++) {
+    if (gamepads[i] && gamepads[i].connected) {
+      return gamepads[i]
+    }
+  }
 }
 
 function releaseGamepadControls() {
