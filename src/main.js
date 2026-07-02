@@ -43,6 +43,9 @@ var lastBoostUpdateAt = Date.now()
 var touchBoosting = false
 var pressedKeys = {}
 var turnRate = 0.052
+var gamepadSteerAngleTarget
+var gamepadBoosting = false
+var gamepadDeadzone = 0.2
 var animationRequestId
 var foodSpawnIntervalIds = []
 var playing = false
@@ -222,7 +225,46 @@ function setupControls() {
 
   window.addEventListener('blur', function () {
     releaseMobileControls()
+    releaseGamepadControls()
   })
+}
+
+function updateGamepadControls() {
+  if (!navigator.getGamepads) return
+
+  var gamepads = navigator.getGamepads()
+  var gamepad
+
+  for (var i = 0; i < gamepads.length; i++) {
+    if (gamepads[i] && gamepads[i].connected) {
+      gamepad = gamepads[i]
+      break
+    }
+  }
+
+  if (!gamepad) {
+    releaseGamepadControls()
+    return
+  }
+
+  var stickX = gamepad.axes[0] || 0
+  var stickY = gamepad.axes[1] || 0
+  var stickDistance = Math.sqrt(stickX * stickX + stickY * stickY)
+
+  if (stickDistance > gamepadDeadzone) {
+    gamepadSteerAngleTarget = Math.atan2(stickY, stickX)
+    steerTarget = undefined
+  } else {
+    gamepadSteerAngleTarget = undefined
+  }
+
+  var boostButton = gamepad.buttons[0]
+  gamepadBoosting = Boolean(boostButton && (boostButton.pressed || boostButton.value > 0.5))
+}
+
+function releaseGamepadControls() {
+  gamepadSteerAngleTarget = undefined
+  gamepadBoosting = false
 }
 
 function setupTouchJoystick() {
@@ -534,6 +576,7 @@ function animate() {
   if (playing) {
     if (a === 0) {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
+      updateGamepadControls()
       updateBoostEnergy()
       updateBoostMeterStatus()
       foodRandom()
@@ -1150,7 +1193,9 @@ function drawFireball(powerup) {
 function moveSnakeHead() {
   applyKeyboardControls()
 
-  if (steerTarget) {
+  if (gamepadSteerAngleTarget !== undefined) {
+    headingAngle = turnTowardAngle(headingAngle, gamepadSteerAngleTarget, turnRate)
+  } else if (steerTarget) {
     var targetAngle = Math.atan2(steerTarget.y - snakeHead.y, steerTarget.x - snakeHead.x)
     headingAngle = turnTowardAngle(headingAngle, targetAngle, turnRate)
   } else if (steerAngleTarget !== undefined) {
@@ -1248,7 +1293,8 @@ function isBoostControlActive() {
     pressedKeys.W ||
     touchBoosting ||
     boostTouchActive ||
-    mobileControls.boost
+    mobileControls.boost ||
+    gamepadBoosting
   )
 }
 
