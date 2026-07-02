@@ -10,7 +10,15 @@ var nextFireballSpawnAt = 0
 var fireballLifetime = 10000
 var fireballSpawnMinDelay = 60000
 var fireballSpawnMaxDelay = 60000
-var fireballMinBeetles = 5
+var fireballMinBeetles = 2
+var goldenMouse
+var nextGoldenMouseSpawnAt = 0
+var goldenMouseLifetime = 12000
+var goldenMouseSpawnMinDelay = 150000
+var goldenMouseSpawnMaxDelay = 240000
+var berserkerDuration = 10000
+var berserkerUntil = 0
+var berserkerSpeedMultiplier = 1.35
 var beetleBurnDuration = 1400
 var swallowRadius = 24
 var grubLifetime = 30000
@@ -35,14 +43,14 @@ var snakeBodyBounceRadius = 18
 var boosting = false
 var boostCoolingDown = false
 var baseBoostDuration = 500
-var boostDurationPerSegment = 35
-var maxBoostDuration = 1500
+var boostDurationPerSegment = 45
+var maxBoostDuration = 1800
 var boostCooldown = 3000
 var boostEnergy = baseBoostDuration
 var lastBoostUpdateAt = Date.now()
 var touchBoosting = false
 var pressedKeys = {}
-var turnRate = 0.052
+var turnRate = 0.065
 var gamepadSteerAngleTarget
 var gamepadBoosting = false
 var gamepadDeadzone = 0.2
@@ -68,6 +76,9 @@ var gameAudioContext
 var rivalAudioContext
 var scoreElement = document.getElementById('score')
 var highScoreElement = document.getElementById('high-score')
+var berserkerStatusElement = document.getElementById('berserker-status')
+var berserkerTimeElement = document.getElementById('berserker-time')
+var lastBerserkerSeconds = -1
 var highScore = getHighScore()
 var highScoreSaveTimer
 var controlsReady = false
@@ -170,6 +181,10 @@ function init() {
 
   if (!nextFireballSpawnAt) {
     scheduleNextFireball()
+  }
+
+  if (!nextGoldenMouseSpawnAt) {
+    scheduleNextGoldenMouse()
   }
 
   if (badSnakes.length === 0) {
@@ -577,10 +592,12 @@ function animate() {
     if (a === 0) {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       updateGamepadControls()
+      updateBerserkerStatus()
       updateBoostEnergy()
       updateBoostMeterStatus()
       foodRandom()
       updateFireball()
+      updateGoldenMouse()
       moveSnakeHead()
       updateBadSnakes()
       applyEntityBounces()
@@ -594,7 +611,7 @@ function animate() {
             continue
           }
 
-          if (foods[i].isBad) {
+          if (foods[i].isBad && !isBerserkerActive()) {
             n = startingSegments
             x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
             y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
@@ -603,7 +620,7 @@ function animate() {
             updateScoreDisplay()
             playSound('badFoodSound')
           } else {
-            var growthValue = foods[i].growthValue || 1
+            var growthValue = foods[i].isBad ? 1 : foods[i].growthValue || 1
 
             n += growthValue
             score += growthValue
@@ -634,6 +651,19 @@ function animate() {
         }
       }
 
+
+      if (goldenMouse) {
+        if (isSnakeTouchingEntity(goldenMouse, 24 * renderScale)) {
+          activateBerserker()
+          goldenMouse = undefined
+          scheduleNextGoldenMouse()
+          playGameSound('eat')
+        } else {
+          drawGoldenMouse(goldenMouse)
+        }
+      }
+
+      drawBerserkerAura()
       drawSnake(snakeHead.x, snakeHead.y)
     }
 
@@ -649,6 +679,27 @@ function drawFood(food) {
   } else {
     drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, isEntityMoving(food))
   }
+}
+
+function drawGoldenMouse(mouse) {
+  var pulse = 0.72 + Math.sin(Date.now() * 0.012) * 0.18
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(255, 208, 62, ' + pulse * 0.26 + ')'
+  ctx.shadowColor = '#ffd43b'
+  ctx.shadowBlur = 20 * renderScale
+  ctx.beginPath()
+  ctx.arc(mouse.x + 6 * renderScale, mouse.y + 5 * renderScale, 23 * renderScale, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  drawGoodFood(
+    mouse.x + 6 * renderScale,
+    mouse.y + 5 * renderScale,
+    mouse.facingAngle,
+    isEntityMoving(mouse),
+    true
+  )
 }
 
 function getFoodExpiresAt(foodType, now) {
@@ -766,7 +817,7 @@ function isEntityMoving(entity) {
   return entity.dx * entity.dx + entity.dy * entity.dy > 0.04
 }
 
-function drawGoodFood(centerX, centerY, angle, isMoving) {
+function drawGoodFood(centerX, centerY, angle, isMoving, isGolden) {
   var legStep = isMoving ? Math.sin(Date.now() * 0.026 + centerX * 0.04 + centerY * 0.03) * 1.2 : 0
   var tailWiggle = isMoving ? Math.sin(Date.now() * 0.02 + centerX * 0.04) * 2.4 : 0
 
@@ -775,12 +826,12 @@ function drawGoodFood(centerX, centerY, angle, isMoving) {
   ctx.rotate(angle)
   ctx.scale(renderScale * 1.14, renderScale * 1.14)
 
-  ctx.fillStyle = 'rgba(232, 209, 184, 0.16)'
+  ctx.fillStyle = isGolden ? 'rgba(255, 217, 71, 0.3)' : 'rgba(232, 209, 184, 0.16)'
   ctx.beginPath()
   ctx.ellipse(-1, 1, 18, 11, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.strokeStyle = '#cfa791'
+  ctx.strokeStyle = isGolden ? '#ffe98a' : '#cfa791'
   ctx.lineWidth = 2
   ctx.lineCap = 'round'
   ctx.beginPath()
@@ -789,26 +840,26 @@ function drawGoodFood(centerX, centerY, angle, isMoving) {
   ctx.quadraticCurveTo(-36, -4 + tailWiggle, -39, -2)
   ctx.stroke()
 
-  drawMouseLegs(legStep)
+  drawMouseLegs(legStep, isGolden)
 
-  ctx.fillStyle = '#8e8179'
-  ctx.strokeStyle = '#5b4e49'
+  ctx.fillStyle = isGolden ? '#d99b16' : '#8e8179'
+  ctx.strokeStyle = isGolden ? '#6f4300' : '#5b4e49'
   ctx.lineWidth = 1.2
   ctx.beginPath()
   ctx.ellipse(-5, 0, 13.5, 8.5, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#b6aaa2'
-  ctx.strokeStyle = '#5b4e49'
+  ctx.fillStyle = isGolden ? '#ffd84d' : '#b6aaa2'
+  ctx.strokeStyle = isGolden ? '#6f4300' : '#5b4e49'
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.ellipse(9, 0, 8.5, 5.6, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#8e8179'
-  ctx.strokeStyle = '#5b4e49'
+  ctx.fillStyle = isGolden ? '#d99b16' : '#8e8179'
+  ctx.strokeStyle = isGolden ? '#6f4300' : '#5b4e49'
   ctx.lineWidth = 0.9
   ctx.beginPath()
   ctx.arc(6.5, -5.2, 3, 0, Math.PI * 2)
@@ -816,7 +867,7 @@ function drawGoodFood(centerX, centerY, angle, isMoving) {
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#d9b9b1'
+  ctx.fillStyle = isGolden ? '#fff0a3' : '#d9b9b1'
   ctx.beginPath()
   ctx.arc(6.9, -5.2, 1.45, 0, Math.PI * 2)
   ctx.arc(6.9, 5.2, 1.45, 0, Math.PI * 2)
@@ -827,7 +878,7 @@ function drawGoodFood(centerX, centerY, angle, isMoving) {
   ctx.arc(16.2, 0, 1.35, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.strokeStyle = '#eadbd1'
+  ctx.strokeStyle = isGolden ? '#fff4bd' : '#eadbd1'
   ctx.lineWidth = 0.85
   ctx.beginPath()
   ctx.moveTo(13.5, -1.2)
@@ -843,7 +894,7 @@ function drawGoodFood(centerX, centerY, angle, isMoving) {
   ctx.restore()
 }
 
-function drawMouseLegs(legStep) {
+function drawMouseLegs(legStep, isGolden) {
   ctx.lineCap = 'round'
   ctx.strokeStyle = 'rgba(54, 39, 34, 0.88)'
   ctx.lineWidth = 2.4
@@ -851,7 +902,7 @@ function drawMouseLegs(legStep) {
   drawMouseLegPath(legStep)
   ctx.stroke()
 
-  ctx.strokeStyle = '#cfa791'
+  ctx.strokeStyle = isGolden ? '#ffe98a' : '#cfa791'
   ctx.lineWidth = 1.15
   ctx.beginPath()
   drawMouseLegPath(legStep)
@@ -1110,6 +1161,138 @@ function scheduleNextFireball() {
   nextFireballSpawnAt = Date.now() + fireballSpawnMinDelay + Math.random() * (fireballSpawnMaxDelay - fireballSpawnMinDelay)
 }
 
+function updateGoldenMouse() {
+  var now = Date.now()
+
+  if (!goldenMouse && now >= nextGoldenMouseSpawnAt) {
+    goldenMouse = generateGoldenMouse()
+  }
+
+  if (!goldenMouse) return
+
+  if (now >= goldenMouse.expiresAt) {
+    goldenMouse = undefined
+    scheduleNextGoldenMouse()
+    return
+  }
+
+  if (!goldenMouse.enteringArena) {
+    updateMouseMovement(goldenMouse)
+  }
+
+  goldenMouse.x += goldenMouse.dx
+  goldenMouse.y += goldenMouse.dy
+  goldenMouse.facingAngle = Math.atan2(goldenMouse.dy, goldenMouse.dx)
+
+  var edgeSize = 16 * renderScale
+
+  if (goldenMouse.enteringArena) {
+    if (isEntityInsideArena(goldenMouse, edgeSize)) {
+      goldenMouse.enteringArena = false
+    } else {
+      return
+    }
+  }
+
+  applySnakeBodyBounce(goldenMouse)
+  applyRoundedArenaBounds(goldenMouse, edgeSize)
+
+  if (goldenMouse.x < 0 || goldenMouse.x > canvas.width - edgeSize) {
+    goldenMouse.dx *= -1
+    goldenMouse.x = Math.max(0, Math.min(canvas.width - edgeSize, goldenMouse.x))
+  }
+
+  if (goldenMouse.y < 0 || goldenMouse.y > canvas.height - edgeSize) {
+    goldenMouse.dy *= -1
+    goldenMouse.y = Math.max(0, Math.min(canvas.height - edgeSize, goldenMouse.y))
+  }
+
+  goldenMouse.facingAngle = Math.atan2(goldenMouse.dy, goldenMouse.dx)
+}
+
+function generateGoldenMouse() {
+  var spawn = getOffscreenSpawn(getRandomFoodSpeed() * 1.08, 28 * renderScale)
+
+  return {
+    x: spawn.x,
+    y: spawn.y,
+    dx: spawn.dx,
+    dy: spawn.dy,
+    facingAngle: Math.atan2(spawn.dy, spawn.dx),
+    type: 'golden-mouse',
+    enteringArena: true,
+    expiresAt: Date.now() + goldenMouseLifetime,
+    fleeEnergy: mouseFleeStamina,
+    pauseUntil: 0,
+    nextTurnAt: Date.now() + 500,
+    lastMouseUpdateAt: Date.now(),
+  }
+}
+
+function scheduleNextGoldenMouse() {
+  nextGoldenMouseSpawnAt = Date.now() + goldenMouseSpawnMinDelay + Math.random() * (goldenMouseSpawnMaxDelay - goldenMouseSpawnMinDelay)
+}
+
+function activateBerserker() {
+  berserkerUntil = Date.now() + berserkerDuration
+  lastBerserkerSeconds = -1
+  document.body.classList.add('is-berserker')
+  calmMiceForBerserker()
+  updateBerserkerStatus()
+}
+
+function calmMiceForBerserker() {
+  var now = Date.now()
+
+  for (var i = 0; i < foods.length; i++) {
+    if (foods[i].type !== 'mouse') continue
+    foods[i].fleeEnergy = mouseFleeStamina
+    foods[i].nextTurnAt = now
+  }
+}
+
+function isBerserkerActive() {
+  return Date.now() < berserkerUntil
+}
+
+function updateBerserkerStatus() {
+  var remaining = Math.max(0, berserkerUntil - Date.now())
+
+  if (remaining <= 0) {
+    document.body.classList.remove('is-berserker')
+    if (berserkerStatusElement) berserkerStatusElement.hidden = true
+    lastBerserkerSeconds = -1
+    return
+  }
+
+  var seconds = Math.ceil(remaining / 1000)
+  document.body.classList.add('is-berserker')
+  if (berserkerStatusElement) berserkerStatusElement.hidden = false
+
+  if (berserkerTimeElement && seconds !== lastBerserkerSeconds) {
+    berserkerTimeElement.textContent = seconds
+    lastBerserkerSeconds = seconds
+  }
+}
+
+function drawBerserkerAura() {
+  if (!isBerserkerActive()) return
+
+  var pulse = 1 + Math.sin(Date.now() * 0.015) * 0.12
+
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 210, 55, 0.72)'
+  ctx.fillStyle = 'rgba(255, 155, 20, 0.1)'
+  ctx.lineWidth = 3 * renderScale
+  ctx.shadowColor = '#ffb515'
+  ctx.shadowBlur = 18 * renderScale
+  ctx.beginPath()
+  ctx.arc(snakeHead.x, snakeHead.y, 22 * renderScale * pulse, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+}
+
 function getActiveBeetleCount() {
   var beetleCount = 0
 
@@ -1203,6 +1386,7 @@ function moveSnakeHead() {
   }
 
   var currentSpeed = snakeSpeed * motionScale
+  if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
   if (boosting) currentSpeed *= boostMultiplier
 
   snakeHead.x += Math.cos(headingAngle) * currentSpeed
@@ -1819,6 +2003,19 @@ function growBadSnake(enemySnake, count) {
 function handleBadSnakeCuts(enemySnake) {
   var now = Date.now()
 
+  if (isBerserkerActive()) {
+    var centipedeHitPlayer = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale) >= 0
+    var playerHitCentipede = (
+      getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 17 * renderScale) >= 0 ||
+      arePointsTouching(snakeHead.x, snakeHead.y, enemySnake.head.x, enemySnake.head.y, 17 * renderScale)
+    )
+
+    if (centipedeHitPlayer || playerHitCentipede) {
+      eatBadSnakeWhole(enemySnake)
+    }
+    return
+  }
+
   if (now >= enemySnake.cutCooldownUntil) {
     var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale)
 
@@ -1844,6 +2041,13 @@ function handleBadSnakeCuts(enemySnake) {
     enemySnake.cutCooldownUntil = now + snakeCutCooldown
     playGameSound('eat')
   }
+}
+
+function eatBadSnakeWhole(enemySnake) {
+  var recoveredSegments = Math.max(1, enemySnake.segments.length)
+  removeBadSnake(enemySnake)
+  addPlayerSegments(recoveredSegments)
+  playGameSound('eat')
 }
 
 function getPlayerBodyHitIndex(pointX, pointY, radius) {
@@ -2048,6 +2252,13 @@ function applyEntityBounces() {
     bounceEntities.push({
       entity: fireball,
       radius: 18 * renderScale,
+    })
+  }
+
+  if (goldenMouse && !goldenMouse.enteringArena) {
+    bounceEntities.push({
+      entity: goldenMouse,
+      radius: 16 * renderScale,
     })
   }
 
@@ -2575,7 +2786,7 @@ function updateMouseMovement(food) {
 
   var fleeRadius = mouseFleeRadius * renderScale
 
-  if (distanceFromSnake < fleeRadius && food.fleeEnergy > 0) {
+  if (!isBerserkerActive() && distanceFromSnake < fleeRadius && food.fleeEnergy > 0) {
     food.fleeEnergy = Math.max(0, food.fleeEnergy - elapsed)
 
     var fleeX = dxFromSnake
