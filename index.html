@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3761223935183500"
+     crossorigin="anonymous"></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-N5WS8C4XSV"></script>
     <script>
@@ -14,60 +16,249 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Slither N' Slash, a fast arcade snake game with boost controls."
+      content="Play Slither N' Slash, a free arcade snake game from Postak Creations. Hunt food, dodge rival snakes, collect power-ups, and chase a new high score."
     />
-    <title>Slither N' Slash</title>
+    <meta name="author" content="Postak Creations" />
+    <meta name="robots" content="index, follow" />
+    <meta name="google-adsense-account" content="ca-pub-3761223935183500" />
+    <meta property="og:title" content="Slither N' Slash" />
+    <meta property="og:description" content="A fast, free arcade snake game from Postak Creations." />
+    <meta property="og:type" content="website" />
+    <title>Slither N' Slash | Free Browser Game</title>
+    <link rel="icon" type="image/png" href="./assets/snake_head.png" />
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <audio id="goodFoodSound" src="./audio/collectcoin.mp3" preload="auto"></audio>
-    <audio id="badFoodSound" src="./audio/negative.mp3" preload="auto"></audio>
+    <a class="skip-link" href="#main-content">Skip to content</a>
 
-    <main class="game-shell">
-      <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost control">
-        <div class="control-box-label">Boost</div>
-        <div class="boost-control-gauge">
-          <div class="boost-control-core"></div>
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="Slither N' Slash home">
+        <img src="./assets/snake_head.png" alt="" width="48" height="48" />
+        <span>Slither <b>N' Slash</b></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu</button>
+      <nav id="site-navigation" class="site-nav" aria-label="Main navigation">
+        <a href="#home">Home</a>
+        <a href="#play">Play</a>
+        <a href="#about">About</a>
+        <a href="#news">News</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <main id="main-content">
+      <section id="home" class="hero content-section" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">A browser game by Postak Creations</p>
+          <h1 id="hero-title">Slither. Hunt. Survive.</h1>
+          <p class="hero-description">
+            Slither N' Slash is a fast arcade snake game where every meal makes you stronger—and every rival
+            is looking for a bite. Chase rare creatures, unleash your boost, and defend your tail.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#play">Play Now</a>
+            <a class="text-button" href="#how-to-play">How to Play</a>
+          </div>
+          <ul class="feature-list" aria-label="Game features">
+            <li>Free to play</li>
+            <li>Desktop and mobile controls</li>
+            <li>No account required</li>
+          </ul>
         </div>
-      </div>
-
-      <section class="game-stage" aria-label="Slither N' Slash arena">
-        <canvas width="400" height="400" id="myCanvas"></canvas>
-        <button class="play-snake-game-btn" type="button">Start Game</button>
+        <div class="hero-art" role="img" aria-label="Slither N' Slash snake racing through a rocky arena">
+          <div class="hero-snake">
+            <img class="hero-snake-head" src="./assets/snake_head.png" alt="" />
+            <img class="hero-snake-body body-one" src="./assets/snake_body.png" alt="" />
+            <img class="hero-snake-body body-two" src="./assets/snake_body.png" alt="" />
+            <img class="hero-snake-body body-three" src="./assets/snake_body.png" alt="" />
+          </div>
+          <span class="food-orb orb-one"></span>
+          <span class="food-orb orb-two"></span>
+          <span class="food-orb orb-three"></span>
+        </div>
       </section>
 
-      <div class="mobile-control-box joystick-control-box" data-mobile-control="joystick" aria-label="Joystick control">
-        <div class="joystick-origin" id="joystick-origin"></div>
-        <div class="joystick-handle" id="joystick-handle"></div>
-        <div class="control-box-label">Move</div>
-      </div>
+      <section class="content-section preview-section" aria-labelledby="preview-title">
+        <div class="section-heading">
+          <p class="eyebrow">Inside the arena</p>
+          <h2 id="preview-title">Every run tells a different story</h2>
+        </div>
+        <div class="preview-grid">
+          <figure class="game-preview preview-hunt">
+            <div class="preview-scene"><span class="mini-snake"></span><span class="mini-target"></span></div>
+            <figcaption><b>Hunt</b><span>Track down grubs, mice, beetles, and rare golden prey.</span></figcaption>
+          </figure>
+          <figure class="game-preview preview-rivals">
+            <div class="preview-scene"><span class="mini-snake"></span><span class="rival-snake"></span></div>
+            <figcaption><b>Battle</b><span>Dodge rival snakes or cut them down before they reach your tail.</span></figcaption>
+          </figure>
+          <figure class="game-preview preview-power">
+            <div class="preview-scene"><span class="mini-snake"></span><span class="power-flare">&#9876;</span></div>
+            <figcaption><b>Power up</b><span>Catch the fireball and enter Berserker mode.</span></figcaption>
+          </figure>
+        </div>
+      </section>
 
-      <aside class="snake-game-panel" aria-label="Slither N' Slash game controls">
-        <h1 class="game-title">Slither N' Slash</h1>
-        <div class="game-feild">
-          <h2 class="score">Score: <span id="score">0</span></h2>
+      <section id="how-to-play" class="content-section how-to-section" aria-labelledby="how-to-title">
+        <div class="section-heading">
+          <p class="eyebrow">How to play</p>
+          <h2 id="how-to-title">Easy to learn. Hard to put down.</h2>
         </div>
-        <div class="high-score-feild">
-          <h2 class="high-score">High Score: <span id="high-score">0</span></h2>
+        <div class="instruction-grid">
+          <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad.</p></article>
+          <article><span>2</span><h3>Feed</h3><p>Catch creatures to grow your snake and raise your score.</p></article>
+          <article><span>3</span><h3>Boost</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b>. Release to recharge.</p></article>
+          <article><span>4</span><h3>Survive</h3><p>Avoid enemy bites and use rare power-ups to turn the fight around.</p></article>
         </div>
-        <div id="berserker-status" class="berserker-status" role="status" hidden>
-          <span class="berserker-status-icon" aria-hidden="true">&#9876;</span>
-          <span class="berserker-status-label">Berserker</span>
-          <span id="berserker-time">10</span>s
-        </div>
-        <div class="boost-label">Boost</div>
-        <div class="boost-panel-display boost-visual-state" aria-label="Boost charge">
-          <div class="boost-control-gauge">
-            <div class="boost-control-core"></div>
+      </section>
+
+      <section id="play" class="play-section" aria-labelledby="play-title">
+        <div class="play-heading">
+          <div><p class="eyebrow">Play in your browser</p><h2 id="play-title">Enter the arena</h2></div>
+          <div class="game-tools">
+            <button id="settings-button" class="tool-button" type="button" aria-expanded="false" aria-controls="game-settings">Settings</button>
+            <button id="fullscreen-button" class="tool-button" type="button">Fullscreen</button>
           </div>
         </div>
-        <div class="boost-meter" aria-label="Boost meter">
-          <div id="boost-meter-fill" class="boost-meter-fill"></div>
+
+        <div id="game-settings" class="settings-menu" hidden>
+          <h3>Game settings</h3>
+          <label><input id="sound-setting" type="checkbox" checked /> Sound effects</label>
+          <label><input id="motion-setting" type="checkbox" /> Reduce visual effects</label>
+          <button id="settings-pause-button" class="tool-button" type="button">Start Game</button>
         </div>
-      </aside>
+
+        <div id="game-container" class="game-shell">
+          <button id="fullscreen-exit-button" class="fullscreen-exit-button" type="button">Exit Fullscreen</button>
+          <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost control">
+            <div class="control-box-label">Boost</div>
+            <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
+          </div>
+
+          <section class="game-stage" aria-label="Slither N' Slash arena">
+            <canvas width="400" height="400" id="myCanvas"></canvas>
+            <button id="game-toggle" class="play-snake-game-btn" type="button">Start Game</button>
+          </section>
+
+          <div class="mobile-control-box joystick-control-box" data-mobile-control="joystick" aria-label="Joystick control">
+            <div class="joystick-origin" id="joystick-origin"></div>
+            <div class="joystick-handle" id="joystick-handle"></div>
+            <div class="control-box-label">Move</div>
+          </div>
+
+          <aside class="snake-game-panel" aria-label="Game status and controls">
+            <h2 class="game-title">Slither N' Slash</h2>
+            <div class="game-feild"><h3 class="score">Score: <span id="score">0</span></h3></div>
+            <div class="high-score-feild"><h3 class="high-score">High Score: <span id="high-score">0</span></h3></div>
+            <div id="berserker-status" class="berserker-status" role="status" hidden>
+              <span class="berserker-status-icon" aria-hidden="true">&#9876;</span>
+              <span class="berserker-status-label">Berserker</span>
+              <span id="berserker-time">10</span>s
+            </div>
+            <div class="boost-label">Boost</div>
+            <div class="boost-panel-display boost-visual-state" aria-label="Boost charge">
+              <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
+            </div>
+            <div class="boost-meter" aria-label="Boost meter"><div id="boost-meter-fill" class="boost-meter-fill"></div></div>
+          </aside>
+        </div>
+        <p class="game-note">Your high score is saved only in this browser. No sign-in is needed.</p>
+      </section>
+
+      <section id="about" class="content-section split-section" aria-labelledby="about-title">
+        <div>
+          <p class="eyebrow">About the game</p>
+          <h2 id="about-title">A sharper spin on classic snake</h2>
+        </div>
+        <div class="prose">
+          <p>
+            Slither N' Slash is an independent arcade game built by <b>Postak Creations</b>. It combines the
+            familiar satisfaction of growing a snake with smooth steering, moving prey, enemy snakes, boost
+            management, and rare power-ups.
+          </p>
+          <p>
+            The game is currently in active development. Future plans include more arena themes, additional
+            creatures and power-ups, expanded settings, accessibility improvements, and an optional leaderboard.
+            Features may change as the game is tested and improved.
+          </p>
+          <p class="version-badge">Current release: <b>v0.4.1</b></p>
+        </div>
+      </section>
+
+      <section id="news" class="content-section" aria-labelledby="news-title">
+        <div class="section-heading"><p class="eyebrow">News &amp; changelog</p><h2 id="news-title">What's new</h2></div>
+        <div class="changelog">
+          <article><time datetime="2026-07-03">July 3, 2026</time><h3>v0.4.1</h3><ul><li>Added the Golden Mouse and Berserker power-up.</li><li>Improved rival snake behavior.</li><li>Refined mobile controls and boost feedback.</li></ul></article>
+          <article><time datetime="2026-06-24">June 24, 2026</time><h3>v0.4.0</h3><ul><li>Introduced the dark rock arena.</li><li>Added moving prey and enemy snakes.</li><li>Improved responsive performance.</li></ul></article>
+        </div>
+      </section>
+
+      <section id="faq" class="content-section" aria-labelledby="faq-title">
+        <div class="section-heading"><p class="eyebrow">FAQ</p><h2 id="faq-title">Good things to know</h2></div>
+        <div class="faq-list">
+          <details><summary>Is Slither N' Slash free?</summary><p>Yes. The game is free to play in your browser and does not require an account.</p></details>
+          <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and boost control. For the best experience, rotate a smaller phone if you need more arena space.</p></details>
+          <details><summary>Can I save my progress?</summary><p>The game saves your high score in local storage on your current browser. Runs and high scores do not sync between devices.</p></details>
+          <details><summary>How do power-ups work?</summary><p>Rare targets appear during longer runs. Catching a fireball activates Berserker mode for a limited time, while rare prey can award extra points.</p></details>
+          <details><summary>Do I need to create an account?</summary><p>No. Slither N' Slash currently has no user accounts and does not ask for personal information to play.</p></details>
+        </div>
+      </section>
+
+      <section id="privacy" class="content-section legal-section" aria-labelledby="privacy-title">
+        <p class="eyebrow">Legal</p>
+        <h2 id="privacy-title">Privacy Policy</h2>
+        <p class="updated">Last updated: July 3, 2026</p>
+        <p>This policy explains how Slither N' Slash and Postak Creations handle information when you visit or play.</p>
+        <h3>Information stored by the game</h3>
+        <p>The game stores your high score and game preferences in your browser's local storage. This information stays on your device and is not tied to an account. You can remove it by clearing this site's browser data.</p>
+        <h3>Analytics</h3>
+        <p>We use Google Analytics to understand general site traffic and game usage. Google may process information such as pages visited, approximate location, device and browser information, referring pages, and IP address according to its own policies.</p>
+        <h3>Advertising and cookies</h3>
+        <p>We use Google AdSense to support the site. Google and its advertising partners may use cookies, local storage, or similar technologies to deliver, measure, and personalize ads where permitted. Depending on your location and choices, ads may be personalized or non-personalized.</p>
+        <h3>Your choices</h3>
+        <p>You can block or delete cookies through your browser, use any consent controls presented on this site, and manage how Google uses advertising data through <a href="https://myadcenter.google.com/" rel="noopener noreferrer">Google's My Ad Center</a>. Blocking storage may affect high-score saving or some site features.</p>
+        <h3>Children's privacy</h3>
+        <p>This site is intended for a general audience and is not directed to children under 13. We do not knowingly collect personal information directly from children.</p>
+        <h3>Data sharing and retention</h3>
+        <p>Postak Creations does not sell personal information. Analytics and advertising data may be processed by Google and its partners under their policies and retention settings. Learn more in <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google's Privacy Policy</a>.</p>
+        <h3>Contact</h3>
+        <p>Questions or privacy requests can be sent to <a href="mailto:support@postakcreations.com">support@postakcreations.com</a>.</p>
+      </section>
+
+      <section id="terms" class="content-section legal-section" aria-labelledby="terms-title">
+        <p class="eyebrow">Legal</p>
+        <h2 id="terms-title">Terms of Use</h2>
+        <p class="updated">Last updated: July 3, 2026</p>
+        <p>By using Slither N' Slash, you agree to use the site lawfully and responsibly. If you do not agree, please do not use the site.</p>
+        <h3>Game availability</h3>
+        <p>The game is provided free of charge and “as is.” We may change, pause, or discontinue features at any time. We do not guarantee uninterrupted operation, saved progress, or compatibility with every device.</p>
+        <h3>Acceptable use</h3>
+        <p>Do not attempt to disrupt the site, bypass security, introduce malicious code, misuse future leaderboard features, scrape the service abusively, or use the site in violation of applicable law.</p>
+        <h3>Ownership</h3>
+        <p>Slither N' Slash, its code, artwork, sounds, branding, and original content are owned by Postak Creations or used with permission. You may play the game for personal, non-commercial use. No other rights are granted.</p>
+        <h3>Third-party services</h3>
+        <p>The site uses third-party services, including Google Analytics and Google AdSense. Those services are governed by their own terms and policies.</p>
+        <h3>Limitation of liability</h3>
+        <p>To the fullest extent permitted by law, Postak Creations is not liable for indirect, incidental, special, or consequential losses resulting from your use of the site. Nothing in these terms excludes rights that cannot legally be excluded.</p>
+        <h3>Contact</h3>
+        <p>Questions about these terms can be sent to <a href="mailto:support@postakcreations.com">support@postakcreations.com</a>.</p>
+      </section>
+
+      <section id="contact" class="content-section contact-section" aria-labelledby="contact-title">
+        <div><p class="eyebrow">Contact</p><h2 id="contact-title">Found a bug? Have an idea?</h2></div>
+        <div><p>Send support requests, feedback, and business inquiries to Postak Creations.</p><a class="primary-button" href="mailto:support@postakcreations.com">support@postakcreations.com</a></div>
+      </section>
     </main>
 
+    <footer class="site-footer">
+      <a class="brand footer-brand" href="#home"><img src="./assets/snake_head.png" alt="" width="38" height="38" /><span>Slither N' Slash</span></a>
+      <p>&copy; <span id="copyright-year">2026</span> Postak Creations. All rights reserved.</p>
+      <nav aria-label="Legal links"><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#contact">Contact</a></nav>
+    </footer>
+
+    <audio id="goodFoodSound" src="./audio/collectcoin.mp3" preload="none"></audio>
+    <audio id="badFoodSound" src="./audio/negative.mp3" preload="none"></audio>
     <script src="./src/main.js" defer></script>
   </body>
 </html>
-

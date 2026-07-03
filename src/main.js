@@ -90,6 +90,7 @@ var mobileControls = {
 }
 var renderScale = 1
 var motionScale = 1
+var soundEnabled = true
 
 // Mobile joystick controls
 var joystickActive = false
@@ -123,28 +124,96 @@ window.addEventListener('resize', function () {
   resizeCanvas()
 })
 
-var playSnakeGameBtn = document.querySelector('.play-snake-game-btn')
+var playSnakeGameBtn = document.getElementById('game-toggle')
 var snakeGamePanel = document.querySelector('.snake-game-panel')
+var settingsPauseButton = document.getElementById('settings-pause-button')
 
 playSnakeGameBtn.addEventListener('click', toggleGamePlayback)
+settingsPauseButton.addEventListener('click', toggleGamePlayback)
+
+setupSiteControls()
 
 function toggleGamePlayback() {
   if (!playing) {
     prepareGameAudio()
     playing = true
     playSnakeGameBtn.innerText = 'Pause'
+    settingsPauseButton.innerText = 'Pause Game'
     document.body.classList.add('is-playing')
     snakeGamePanel.insertBefore(playSnakeGameBtn, snakeGamePanel.children[1])
     init()
   } else {
     playing = false
     playSnakeGameBtn.innerText = 'Resume Game'
+    settingsPauseButton.innerText = 'Resume Game'
     document.body.classList.remove('is-playing')
     cancelAnimationFrame(animationRequestId)
     stopFoodTimer()
     stopBadSnakeTimer()
     resetBoost()
   }
+}
+
+function setupSiteControls() {
+  var navToggle = document.querySelector('.nav-toggle')
+  var siteNavigation = document.getElementById('site-navigation')
+  var settingsButton = document.getElementById('settings-button')
+  var settingsMenu = document.getElementById('game-settings')
+  var fullscreenButton = document.getElementById('fullscreen-button')
+  var fullscreenExitButton = document.getElementById('fullscreen-exit-button')
+  var gameContainer = document.getElementById('game-container')
+  var soundSetting = document.getElementById('sound-setting')
+  var motionSetting = document.getElementById('motion-setting')
+  var copyrightYear = document.getElementById('copyright-year')
+
+  copyrightYear.textContent = new Date().getFullYear()
+
+  navToggle.addEventListener('click', function () {
+    var isOpen = siteNavigation.classList.toggle('is-open')
+    navToggle.setAttribute('aria-expanded', String(isOpen))
+  })
+
+  siteNavigation.addEventListener('click', function (event) {
+    if (!event.target.closest('a')) return
+    siteNavigation.classList.remove('is-open')
+    navToggle.setAttribute('aria-expanded', 'false')
+  })
+
+  settingsButton.addEventListener('click', function () {
+    var willOpen = settingsMenu.hidden
+    settingsMenu.hidden = !willOpen
+    settingsButton.setAttribute('aria-expanded', String(willOpen))
+  })
+
+  soundSetting.addEventListener('change', function () {
+    soundEnabled = soundSetting.checked
+
+    if (!soundEnabled && gameAudioContext) {
+      gameAudioContext.suspend().catch(function () {})
+    }
+  })
+
+  motionSetting.addEventListener('change', function () {
+    document.body.classList.toggle('reduce-effects', motionSetting.checked)
+  })
+
+  fullscreenButton.addEventListener('click', function () {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {})
+      return
+    }
+
+    gameContainer.requestFullscreen().catch(function () {})
+  })
+
+  fullscreenExitButton.addEventListener('click', function () {
+    document.exitFullscreen().catch(function () {})
+  })
+
+  document.addEventListener('fullscreenchange', function () {
+    fullscreenButton.innerText = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen'
+    window.setTimeout(resizeCanvas, 60)
+  })
 }
 
 function resizeCanvas() {
@@ -1627,6 +1696,8 @@ function turnTowardAngle(current, target, amount) {
 }
 
 function playSound(id) {
+  if (!soundEnabled) return
+
   if (id === 'goodFoodSound') {
     playGameSound('eat')
     return
@@ -1645,6 +1716,8 @@ function playSound(id) {
 }
 
 function playGameSound(type) {
+  if (!soundEnabled) return
+
   prepareGameAudio()
   if (!gameAudioContext) return
 
@@ -1662,6 +1735,8 @@ function playGameSound(type) {
 }
 
 function prepareGameAudio() {
+  if (!soundEnabled) return
+
   if (gameAudioContext) return
 
   var AudioContextConstructor = window.AudioContext || window.webkitAudioContext
@@ -1693,6 +1768,8 @@ function playGameTone(startFrequency, endFrequency, duration, type, volume, dela
 }
 
 function playRivalSound(type) {
+  if (!soundEnabled) return
+
   prepareGameAudio()
   if (!rivalAudioContext) return
 
