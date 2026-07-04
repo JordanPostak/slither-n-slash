@@ -1,0 +1,374 @@
+// Canvas setup plus keyboard, gamepad, pointer, and mobile input handling.
+
+function resizeCanvas() {
+  var rect = gameStage.getBoundingClientRect()
+  canvas.width = Math.max(getCanvasMinSide(), Math.floor(rect.width))
+  canvas.height = Math.max(getCanvasMinSide(), Math.floor(rect.height))
+  renderScale = getRenderScale()
+  motionScale = getMotionScale()
+  segLength = 10 * renderScale
+  arenaCornerRadius = getArenaCornerRadius()
+  snakeBodyBounceRadius = 18 * renderScale
+  swallowRadius = 24 * renderScale
+  gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius + 'px')
+}
+
+function init() {
+  ctx = canvas.getContext('2d')
+
+  if (!controlsReady) {
+    setupControls()
+    controlsReady = true
+  }
+
+  if (snakeHead.x === 0 && snakeHead.y === 0) {
+    snakeHead = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+    }
+
+    resetSnakeBody()
+  } else if (snakeTrail.length === 0) {
+    resetSnakeBody()
+  }
+
+  updateHighScoreDisplay()
+
+  if (!nextFireballSpawnAt) {
+    scheduleNextFireball()
+  }
+
+  if (!nextGoldenMouseSpawnAt) {
+    scheduleNextGoldenMouse()
+  }
+
+  if (badSnakes.length === 0) {
+    spawnBadSnakes()
+  }
+
+  startFoodTimer()
+  startBadSnakeTimer()
+  lastBoostUpdateAt = Date.now()
+  requestAnimationFrame(animate)
+}
+
+function setupControls() {
+  setupTouchJoystick()
+  requestAnimationFrame(updateGamepadPauseControl)
+
+  window.addEventListener('keydown', function (evt) {
+    if (!shouldCaptureGameKeyboard(evt)) return
+
+    if (evt.key === 'Shift' || evt.key === ' ') {
+      evt.preventDefault()
+      pressedKeys[evt.key] = true
+      return
+    }
+
+    if (!isMovementKey(evt.key)) return
+
+    evt.preventDefault()
+    pressedKeys[evt.key] = true
+    steerTarget = undefined
+  })
+
+  window.addEventListener('keyup', function (evt) {
+    var isGameKey = evt.key === 'Shift' || evt.key === ' ' || isMovementKey(evt.key)
+    if (!isGameKey) return
+
+    pressedKeys[evt.key] = false
+
+    if (!shouldCaptureGameKeyboard(evt)) return
+
+    if (evt.key === 'Shift' || evt.key === ' ') {
+      evt.preventDefault()
+    }
+
+    if (!isMovementKey(evt.key)) return
+
+    evt.preventDefault()
+  })
+
+  canvas.addEventListener('pointermove', function (evt) {
+    if (evt.pointerType !== 'mouse') return
+
+    steerTarget = getPointerPos(canvas, evt.clientX, evt.clientY)
+  })
+
+  canvas.addEventListener('pointerleave', function (evt) {
+    if (evt.pointerType !== 'mouse') return
+
+    steerTarget = undefined
+  })
+
+  window.addEventListener('blur', function () {
+    releaseMobileControls()
+    releaseGamepadControls()
+  })
+}
+
+function shouldCaptureGameKeyboard(evt) {
+  if (!playing) return false
+
+  var target = evt.target
+  if (target && target.closest && target.closest('input, textarea, select, button, a, [contenteditable="true"]')) {
+    return false
+  }
+
+  var rect = gameStage.getBoundingClientRect()
+  var visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0)
+  var requiredVisibleHeight = Math.min(rect.height * 0.35, window.innerHeight * 0.35)
+
+  return visibleHeight >= requiredVisibleHeight
+}
+
+function updateGamepadControls() {
+  if (!navigator.getGamepads) return
+
+  var gamepad = getActiveGamepad()
+
+  if (!gamepad) {
+    releaseGamepadControls()
+    return
+  }
+
+  var stickX = gamepad.axes[0] || 0
+  var stickY = gamepad.axes[1] || 0
+  var stickDistance = Math.sqrt(stickX * stickX + stickY * stickY)
+
+  if (stickDistance > gamepadDeadzone) {
+    gamepadSteerAngleTarget = Math.atan2(stickY, stickX)
+    steerTarget = undefined
+  } else {
+    gamepadSteerAngleTarget = undefined
+  }
+
+  var boostButton = gamepad.buttons[0]
+  gamepadBoosting = Boolean(boostButton && (boostButton.pressed || boostButton.value > 0.5))
+}
+
+function updateGamepadPauseControl() {
+  var gamepad = getActiveGamepad()
+  var menuButton = gamepad && gamepad.buttons[9]
+  var menuButtonPressed = Boolean(
+    menuButton && (menuButton.pressed || menuButton.value > 0.5)
+  )
+
+  if (menuButtonPressed && !gamepadMenuButtonPressed) {
+    toggleGamePlayback()
+  }
+
+  gamepadMenuButtonPressed = menuButtonPressed
+  requestAnimationFrame(updateGamepadPauseControl)
+}
+
+function getActiveGamepad() {
+  if (!navigator.getGamepads) return
+
+  var gamepads = navigator.getGamepads()
+
+  for (var i = 0; i < gamepads.length; i++) {
+    if (gamepads[i] && gamepads[i].connected) {
+      return gamepads[i]
+    }
+  }
+}
+
+function releaseGamepadControls() {
+  gamepadSteerAngleTarget = undefined
+  gamepadBoosting = false
+}
+
+function setupTouchJoystick() {
+  joystickBox = document.querySelector('[data-mobile-control="joystick"]')
+  boostBox = document.querySelector('[data-mobile-control="boost"]')
+  joystickOrigin = document.getElementById('joystick-origin')
+  joystickHandle = document.getElementById('joystick-handle')
+  boostMeterFill = document.getElementById('boost-meter-fill')
+  boostControlGauges = document.querySelectorAll('.boost-control-gauge')
+  boostVisualStates = document.querySelectorAll('.boost-visual-state')
+
+  if (joystickBox) {
+    joystickBox.addEventListener('pointerdown', handleJoystickPointerDown)
+    joystickBox.addEventListener('pointermove', handleJoystickPointerMove)
+  }
+
+  if (boostBox) {
+    boostBox.addEventListener('pointerdown', handleBoostPointerDown)
+  }
+
+  document.addEventListener('pointermove', handleActiveTouchPointerMove)
+  document.addEventListener('pointerup', handleActiveTouchPointerUp)
+  document.addEventListener('pointercancel', handleActiveTouchPointerUp)
+}
+
+function handleJoystickPointerDown(evt) {
+  if (!playing || evt.pointerType === 'mouse' || joystickActive) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  joystickActive = true
+  joystickTouchId = evt.pointerId
+  joystickCurrentX = evt.clientX
+  joystickCurrentY = evt.clientY
+  capturePointer(evt.currentTarget, evt.pointerId)
+  steerTarget = undefined
+  updateJoystickTargetFromPointer(evt.clientX, evt.clientY)
+  updateJoystickVisual()
+}
+
+function handleJoystickPointerMove(evt) {
+  if (evt.pointerId !== joystickTouchId || !joystickActive) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  updateJoystickTargetFromPointer(evt.clientX, evt.clientY)
+}
+
+function handleJoystickPointerUp(evt) {
+  if (evt.pointerId !== joystickTouchId) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  releaseJoystickControl()
+}
+
+function handleBoostPointerDown(evt) {
+  if (!playing || evt.pointerType === 'mouse' || boostTouchActive) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  boostTouchActive = true
+  boostTouchId = evt.pointerId
+  boostBox.classList.add('is-pressed')
+  capturePointer(evt.currentTarget, evt.pointerId)
+  updateBoostMeterStatus(true)
+}
+
+function handleBoostPointerUp(evt) {
+  if (evt.pointerId !== boostTouchId) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  releaseBoostControl()
+}
+
+function handleActiveTouchPointerMove(evt) {
+  if (evt.pointerId === joystickTouchId) {
+    handleJoystickPointerMove(evt)
+  }
+}
+
+function handleActiveTouchPointerUp(evt) {
+  if (evt.pointerId === joystickTouchId) {
+    handleJoystickPointerUp(evt)
+  }
+
+  if (evt.pointerId === boostTouchId) {
+    handleBoostPointerUp(evt)
+  }
+}
+
+function updateJoystickTargetFromPointer(clientX, clientY) {
+  joystickCurrentX = clientX
+  joystickCurrentY = clientY
+
+  var joystickRect = joystickBox.getBoundingClientRect()
+  var deltaX = joystickCurrentX - (joystickRect.left + joystickRect.width / 2)
+  var deltaY = joystickCurrentY - (joystickRect.top + joystickRect.height / 2)
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+  if (distance > joystickDeadzone) {
+    steerAngleTarget = Math.atan2(deltaY, deltaX)
+  } else {
+    steerAngleTarget = undefined
+  }
+
+  updateJoystickVisual()
+}
+
+function releaseJoystickControl() {
+  joystickActive = false
+  joystickTouchId = null
+  steerAngleTarget = undefined
+  updateJoystickVisual()
+}
+
+function releaseBoostControl() {
+  boostTouchActive = false
+  boostTouchId = null
+  if (boostBox) {
+    boostBox.classList.remove('is-pressed')
+  }
+  updateBoostMeterStatus(true)
+}
+
+function capturePointer(element, pointerId) {
+  if (!element || !element.setPointerCapture) return
+
+  try {
+    element.setPointerCapture(pointerId)
+  } catch {}
+}
+
+function releaseMobileControls() {
+  releaseJoystickControl()
+  releaseBoostControl()
+  mobileControls.left = false
+  mobileControls.right = false
+  mobileControls.boost = false
+  touchBoosting = false
+  steerAngleTarget = undefined
+}
+
+function updateJoystickVisual() {
+  if (!joystickBox || !joystickOrigin || !joystickHandle) return
+
+  if (!joystickActive) {
+    joystickBox.classList.remove('is-active')
+    joystickOrigin.style.opacity = 1
+    joystickOrigin.style.left = '50%'
+    joystickOrigin.style.top = '50%'
+    joystickHandle.style.opacity = 0
+    return
+  }
+
+  var boxRect = joystickBox.getBoundingClientRect()
+  var startX = boxRect.width / 2
+  var startY = boxRect.height / 2
+  var currentX = joystickCurrentX - boxRect.left
+  var currentY = joystickCurrentY - boxRect.top
+  var maxTravel = Math.min(boxRect.width, boxRect.height) * 0.34
+  var deltaX = currentX - startX
+  var deltaY = currentY - startY
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+  if (distance > maxTravel) {
+    deltaX = deltaX / distance * maxTravel
+    deltaY = deltaY / distance * maxTravel
+    currentX = startX + deltaX
+    currentY = startY + deltaY
+  }
+
+  joystickBox.classList.add('is-active')
+  joystickOrigin.style.opacity = 1
+  joystickHandle.style.opacity = 1
+  joystickOrigin.style.left = startX + 'px'
+  joystickOrigin.style.top = startY + 'px'
+  joystickHandle.style.left = currentX + 'px'
+  joystickHandle.style.top = currentY + 'px'
+}
+
+function isMovementKey(key) {
+  return (
+    key === 'ArrowLeft' ||
+    key === 'ArrowRight' ||
+    key === 'ArrowUp' ||
+    key === 'a' ||
+    key === 'A' ||
+    key === 'd' ||
+    key === 'D' ||
+    key === 'w' ||
+    key === 'W'
+  )
+}

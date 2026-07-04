@@ -1,0 +1,364 @@
+// Landing-page navigation, play mode, settings, and adjustable mobile controls.
+
+function handlePrimaryGameToggle() {
+  if (!document.body.classList.contains('is-game-mode')) {
+    enterGameMode(false)
+  }
+
+  toggleGamePlayback()
+}
+
+function enterGameMode(shouldStart) {
+  var gameContainer = document.getElementById('game-container')
+
+  document.documentElement.classList.add('is-game-mode')
+  document.body.classList.add('is-game-mode')
+  gameContainer.classList.add('is-play-mode')
+  gameModePauseButton.innerText = playing ? 'Pause' : (controlsReady ? 'Resume' : 'Start')
+  updateActiveSectionNavigation('play')
+
+  window.requestAnimationFrame(function () {
+    refreshMobileControlPositions()
+    resizeCanvas()
+    window.requestAnimationFrame(resizeCanvas)
+  })
+
+  if (shouldStart && !playing) {
+    toggleGamePlayback()
+  }
+}
+
+function exitGameMode() {
+  var gameContainer = document.getElementById('game-container')
+
+  if (playing) {
+    toggleGamePlayback()
+  }
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(function () {})
+  }
+
+  document.documentElement.classList.remove('is-game-mode')
+  document.body.classList.remove('is-game-mode')
+  gameContainer.classList.remove('is-play-mode')
+
+  window.requestAnimationFrame(function () {
+    var playSection = document.getElementById('play')
+    var headerOffset = 90
+    window.scrollTo(0, Math.max(0, playSection.offsetTop - headerOffset))
+  })
+}
+
+function toggleGamePlayback() {
+  if (!playing) {
+    prepareGameAudio()
+    playing = true
+    playSnakeGameBtn.innerText = 'Pause'
+    settingsPauseButton.innerText = 'Pause Game'
+    gameModePauseButton.innerText = 'Pause'
+    document.body.classList.add('is-playing')
+    snakeGamePanel.insertBefore(playSnakeGameBtn, snakeGamePanel.children[1])
+    init()
+  } else {
+    playing = false
+    playSnakeGameBtn.innerText = 'Resume Game'
+    settingsPauseButton.innerText = 'Resume Game'
+    gameModePauseButton.innerText = 'Resume'
+    document.body.classList.remove('is-playing')
+    cancelAnimationFrame(animationRequestId)
+    stopFoodTimer()
+    stopBadSnakeTimer()
+    resetBoost()
+  }
+}
+
+function setupSiteControls() {
+  var navToggle = document.querySelector('.nav-toggle')
+  var siteNavigation = document.getElementById('site-navigation')
+  var settingsButton = document.getElementById('settings-button')
+  var settingsMenu = document.getElementById('game-settings')
+  var fullscreenButton = document.getElementById('fullscreen-button')
+  var fullscreenExitButton = document.getElementById('fullscreen-exit-button')
+  var gameContainer = document.getElementById('game-container')
+  var soundSetting = document.getElementById('sound-setting')
+  var motionSetting = document.getElementById('motion-setting')
+  var copyrightYear = document.getElementById('copyright-year')
+
+  copyrightYear.textContent = new Date().getFullYear()
+  setupSectionNavigation()
+  setupAdjustableMobileControls()
+
+  navToggle.addEventListener('click', function () {
+    var isOpen = siteNavigation.classList.toggle('is-open')
+    navToggle.setAttribute('aria-expanded', String(isOpen))
+  })
+
+  siteNavigation.addEventListener('click', function (event) {
+    if (!event.target.closest('a')) return
+    siteNavigation.classList.remove('is-open')
+    navToggle.setAttribute('aria-expanded', 'false')
+  })
+
+  document.addEventListener('click', function (event) {
+    var playLink = event.target.closest('a[href="#play"]')
+    if (!playLink) return
+
+    event.preventDefault()
+    siteNavigation.classList.remove('is-open')
+    navToggle.setAttribute('aria-expanded', 'false')
+    enterGameMode(true)
+  })
+
+  settingsButton.addEventListener('click', function () {
+    var willOpen = settingsMenu.hidden
+    settingsMenu.hidden = !willOpen
+    settingsButton.setAttribute('aria-expanded', String(willOpen))
+  })
+
+  soundSetting.addEventListener('change', function () {
+    soundEnabled = soundSetting.checked
+
+    if (!soundEnabled && gameAudioContext) {
+      gameAudioContext.suspend().catch(function () {})
+    }
+  })
+
+  motionSetting.addEventListener('change', function () {
+    document.body.classList.toggle('reduce-effects', motionSetting.checked)
+  })
+
+  fullscreenButton.addEventListener('click', function () {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {})
+      return
+    }
+
+    enterGameMode(false)
+    gameContainer.requestFullscreen().catch(function () {})
+  })
+
+  fullscreenExitButton.addEventListener('click', function () {
+    exitGameMode()
+  })
+
+  document.addEventListener('fullscreenchange', function () {
+    fullscreenButton.innerText = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen'
+    window.setTimeout(resizeCanvas, 60)
+  })
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !document.body.classList.contains('is-game-mode')) return
+    if (document.fullscreenElement) return
+
+    exitGameMode()
+  })
+}
+
+function setupSectionNavigation() {
+  var updateScheduled = false
+
+  function scheduleNavigationUpdate() {
+    if (updateScheduled || document.body.classList.contains('is-game-mode')) return
+
+    updateScheduled = true
+    window.requestAnimationFrame(function () {
+      updateScheduled = false
+      updateActiveSectionNavigation()
+    })
+  }
+
+  window.addEventListener('scroll', scheduleNavigationUpdate, { passive: true })
+  window.addEventListener('resize', scheduleNavigationUpdate)
+  updateActiveSectionNavigation()
+}
+
+function updateActiveSectionNavigation(forcedSectionId) {
+  var navigationLinks = Array.from(document.querySelectorAll(
+    '.site-nav a[href^="#"], .site-footer nav a[href^="#"]'
+  ))
+  var sectionIds = []
+
+  for (var i = 0; i < navigationLinks.length; i++) {
+    var sectionId = navigationLinks[i].getAttribute('href').slice(1)
+    if (sectionId && sectionIds.indexOf(sectionId) === -1 && document.getElementById(sectionId)) {
+      sectionIds.push(sectionId)
+    }
+  }
+
+  sectionIds.sort(function (firstId, secondId) {
+    return document.getElementById(firstId).offsetTop - document.getElementById(secondId).offsetTop
+  })
+
+  var activeSectionId = forcedSectionId || sectionIds[0]
+
+  if (!forcedSectionId) {
+    var readingLine = window.scrollY + Math.min(window.innerHeight * 0.38, 300)
+
+    for (var sectionIndex = 0; sectionIndex < sectionIds.length; sectionIndex++) {
+      if (document.getElementById(sectionIds[sectionIndex]).offsetTop <= readingLine) {
+        activeSectionId = sectionIds[sectionIndex]
+      }
+    }
+
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      activeSectionId = sectionIds[sectionIds.length - 1]
+    }
+  }
+
+  for (var linkIndex = 0; linkIndex < navigationLinks.length; linkIndex++) {
+    var isCurrent = navigationLinks[linkIndex].getAttribute('href') === '#' + activeSectionId
+    navigationLinks[linkIndex].classList.toggle('is-current', isCurrent)
+
+    if (isCurrent) {
+      navigationLinks[linkIndex].setAttribute('aria-current', 'location')
+    } else {
+      navigationLinks[linkIndex].removeAttribute('aria-current')
+    }
+  }
+}
+
+function setupAdjustableMobileControls() {
+  var controlBoxes = document.querySelectorAll('[data-mobile-control]')
+
+  for (var i = 0; i < controlBoxes.length; i++) {
+    restoreMobileControlPosition(controlBoxes[i])
+    controlBoxes[i].addEventListener('pointerdown', beginMobileControlAdjustment, true)
+  }
+
+  document.addEventListener('pointermove', moveMobileControlAdjustment, true)
+  document.addEventListener('pointerup', endMobileControlAdjustment, true)
+  document.addEventListener('pointercancel', endMobileControlAdjustment, true)
+
+  window.addEventListener('resize', function () {
+    for (var boxIndex = 0; boxIndex < controlBoxes.length; boxIndex++) {
+      applyMobileControlOffset(
+        controlBoxes[boxIndex],
+        getStoredMobileControlOffset(controlBoxes[boxIndex])
+      )
+    }
+  })
+}
+
+function beginMobileControlAdjustment(event) {
+  if (playing || !isAdjustableMobileControlLayout()) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var controlBox = event.currentTarget
+  var controlType = controlBox.dataset.mobileControl
+  var startingOffset = getCurrentMobileControlOffset(controlBox)
+
+  adjustableControlDrag = {
+    box: controlBox,
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startOffset: startingOffset,
+    controlType: controlType,
+  }
+
+  controlBox.classList.add('is-repositioning')
+  capturePointer(controlBox, event.pointerId)
+}
+
+function moveMobileControlAdjustment(event) {
+  if (!adjustableControlDrag || event.pointerId !== adjustableControlDrag.pointerId) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var nextOffset = adjustableControlDrag.startOffset + event.clientY - adjustableControlDrag.startY
+  applyMobileControlOffset(adjustableControlDrag.box, nextOffset)
+}
+
+function endMobileControlAdjustment(event) {
+  if (!adjustableControlDrag || event.pointerId !== adjustableControlDrag.pointerId) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var controlBox = adjustableControlDrag.box
+  var finalOffset = getCurrentMobileControlOffset(controlBox)
+  controlBox.classList.remove('is-repositioning')
+
+  try {
+    localStorage.setItem(getMobileControlStorageKey(controlBox), String(Math.round(finalOffset)))
+  } catch {}
+
+  adjustableControlDrag = undefined
+}
+
+function applyMobileControlOffset(controlBox, requestedOffset) {
+  if (!isAdjustableMobileControlLayout()) {
+    controlBox.style.setProperty('--control-y-offset', requestedOffset + 'px')
+    controlBox.dataset.controlYOffset = String(requestedOffset)
+    return
+  }
+
+  var currentOffset = getCurrentMobileControlOffset(controlBox)
+  var rect = controlBox.getBoundingClientRect()
+  var baseTop = rect.top - currentOffset
+  var baseBottom = rect.bottom - currentOffset
+  var safeTop = getMobileControlSafeTop(controlBox)
+  var safeBottom = 6
+  var minimumOffset = safeTop - baseTop
+  var maximumOffset = window.innerHeight - safeBottom - baseBottom
+  var nextOffset = Math.max(minimumOffset, Math.min(maximumOffset, requestedOffset || 0))
+
+  controlBox.style.setProperty('--control-y-offset', nextOffset + 'px')
+  controlBox.dataset.controlYOffset = String(nextOffset)
+}
+
+function getMobileControlSafeTop(controlBox) {
+  var safeTop = 54
+
+  if (controlBox.dataset.mobileControl === 'boost') {
+    var toolbar = document.querySelector('.game-mode-toolbar')
+    var toolbarRect = toolbar ? toolbar.getBoundingClientRect() : undefined
+    if (toolbarRect && toolbarRect.height) {
+      safeTop = Math.max(safeTop, toolbarRect.bottom + 44)
+    }
+
+  } else {
+    var highScoreField = document.querySelector('.high-score-feild')
+    var highScoreRect = highScoreField ? highScoreField.getBoundingClientRect() : undefined
+    if (highScoreRect && highScoreRect.height) safeTop = Math.max(safeTop, highScoreRect.bottom + 6)
+  }
+
+  return safeTop
+}
+
+function refreshMobileControlPositions() {
+  var controlBoxes = document.querySelectorAll('[data-mobile-control]')
+
+  for (var i = 0; i < controlBoxes.length; i++) {
+    applyMobileControlOffset(controlBoxes[i], getStoredMobileControlOffset(controlBoxes[i]))
+  }
+}
+
+function restoreMobileControlPosition(controlBox) {
+  applyMobileControlOffset(controlBox, getStoredMobileControlOffset(controlBox))
+}
+
+function getStoredMobileControlOffset(controlBox) {
+  try {
+    var storedOffset = localStorage.getItem(getMobileControlStorageKey(controlBox))
+    return storedOffset ? parseFloat(storedOffset) || 0 : 0
+  } catch {
+    return 0
+  }
+}
+
+function getCurrentMobileControlOffset(controlBox) {
+  return parseFloat(controlBox.dataset.controlYOffset) || 0
+}
+
+function getMobileControlStorageKey(controlBox) {
+  return 'mobile-control-' + controlBox.dataset.mobileControl + '-y'
+}
+
+function isAdjustableMobileControlLayout() {
+  return document.body.classList.contains('is-game-mode') &&
+    window.matchMedia('(max-width: 1024px) and (max-height: 540px) and (orientation: landscape)').matches
+}

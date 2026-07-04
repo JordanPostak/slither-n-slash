@@ -31,7 +31,14 @@ Version 0.5.0 — Trap & Transform, released July 4, 2026.
 ## Files
 
 - `index.html` - app shell
-- `src/main.js` - game state, controls, drawing, scoring
+- `src/main.js` - startup wiring only
+- `src/game-state.js` - shared configuration and runtime state
+- `src/site-ui.js`, `src/hero-preview.js` - landing page, navigation, play mode, and hero art
+- `src/input.js`, `src/player.js`, `src/snake.js` - controls, player movement, boost, body trail, and rendering
+- `src/food.js`, `src/food-render.js`, `src/powerups.js` - prey, poison beetles, orange rewards, and power-ups
+- `src/centipedes.js`, `src/centipede-combat.js`, `src/centipede-render.js` - centipede AI, combat, and visuals
+- `src/traps.js`, `src/collisions.js`, `src/world.js` - trapping, collision response, arena movement, and bounds
+- `src/game-loop.js`, `src/audio-score.js` - frame orchestration, sound, score, and local high score
 - `src/styles.css` - responsive layout and game styling
 - `assets/dark-rock-background.png` - generated dark rock background texture
 - `audio/` - copied sound effects from the portfolio
