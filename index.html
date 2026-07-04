@@ -16,13 +16,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Play Slither N' Slash, a free arcade snake game from Postak Creations. Hunt food, dodge rival snakes, collect power-ups, and chase a new high score."
+      content="Play Slither N' Slash, a free arcade snake game from Postak Creations. Grow, battle centipedes, trap creatures in body loops, and collect their glowing rewards."
     />
     <meta name="author" content="Postak Creations" />
     <meta name="robots" content="index, follow" />
     <meta name="google-adsense-account" content="ca-pub-3761223935183500" />
     <meta property="og:title" content="Slither N' Slash" />
-    <meta property="og:description" content="A fast, free arcade snake game from Postak Creations." />
+    <meta property="og:description" content="Grow, battle, boost, and trap creatures in this free arcade snake game from Postak Creations." />
     <meta property="og:type" content="website" />
     <title>Slither N' Slash | Free Browser Game</title>
     <link rel="icon" type="image/png" href="./assets/snake_head.png" />
@@ -39,6 +39,7 @@
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu</button>
       <nav id="site-navigation" class="site-nav" aria-label="Main navigation">
         <a href="#home">Home</a>
+        <a href="#how-to-play">How to Play</a>
         <a href="#play">Play</a>
         <a href="#about">About</a>
         <a href="#news">News</a>
@@ -53,8 +54,8 @@
           <p class="eyebrow">A browser game by Postak Creations</p>
           <h1 id="hero-title">Slither. Hunt. Survive.</h1>
           <p class="hero-description">
-            Slither N' Slash is a fast arcade snake game where every meal makes you stronger—and every rival
-            is looking for a bite. Chase rare creatures, unleash your boost, and defend your tail.
+            Slither N' Slash is an arcade snake game where every meal makes you stronger and every centipede
+            is looking for a bite. Hunt moving prey, close your body into traps, unleash your boost, and defend your tail.
           </p>
           <div class="hero-actions">
             <a class="primary-button" href="#play">Play Now</a>
@@ -74,6 +75,19 @@
         </div>
       </section>
 
+      <section id="how-to-play" class="content-section how-to-section" aria-labelledby="how-to-title">
+        <div class="section-heading">
+          <p class="eyebrow">How to play</p>
+          <h2 id="how-to-title">Easy to learn. Hard to put down.</h2>
+        </div>
+        <div class="instruction-grid">
+          <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad. Pause to reposition landscape controls.</p></article>
+          <article><span>2</span><h3>Feed</h3><p>Eat grubs, mice, and orange balls to grow. Poison beetles are dangerous after their blue two-second arrival shield fades.</p></article>
+          <article><span>3</span><h3>Boost</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b>. Release to recharge. Longer snakes gain more boost capacity.</p></article>
+          <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures slow and turn orange for three seconds; keep the loop closed until they become food.</p></article>
+        </div>
+      </section>
+
       <section class="content-section preview-section" aria-labelledby="preview-title">
         <div class="section-heading">
           <p class="eyebrow">Inside the arena</p>
@@ -82,30 +96,18 @@
         <div class="preview-grid">
           <figure class="game-preview preview-hunt">
             <div class="preview-scene"><span class="mini-snake"></span><span class="mini-target"></span></div>
-            <figcaption><b>Hunt</b><span>Track down grubs, mice, beetles, and rare golden prey.</span></figcaption>
+            <figcaption><b>Hunt</b><span>Grubs add one segment and mice add three. Avoid poison beetles, or trap them and wait for a safe orange reward.</span></figcaption>
           </figure>
           <figure class="game-preview preview-rivals">
             <div class="preview-scene"><span class="mini-snake"></span><span class="rival-snake"></span></div>
-            <figcaption><b>Battle</b><span>Dodge rival snakes or cut them down before they reach your tail.</span></figcaption>
+            <figcaption><b>Battle</b><span>Centipedes and your snake collide and bounce. Bite their bodies, protect yours, or surround the entire enemy to transform it.</span></figcaption>
           </figure>
           <figure class="game-preview preview-power">
             <div class="preview-scene"><span class="mini-snake"></span><span class="power-flare">&#9876;</span></div>
-            <figcaption><b>Power up</b><span>Catch the fireball and enter Berserker mode.</span></figcaption>
+            <figcaption><b>Power up</b><span>The Golden Mouse starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
           </figure>
         </div>
-      </section>
-
-      <section id="how-to-play" class="content-section how-to-section" aria-labelledby="how-to-title">
-        <div class="section-heading">
-          <p class="eyebrow">How to play</p>
-          <h2 id="how-to-title">Easy to learn. Hard to put down.</h2>
-        </div>
-        <div class="instruction-grid">
-          <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad.</p></article>
-          <article><span>2</span><h3>Feed</h3><p>Catch creatures to grow your snake and raise your score.</p></article>
-          <article><span>3</span><h3>Boost</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b>. Release to recharge.</p></article>
-          <article><span>4</span><h3>Survive</h3><p>Avoid enemy bites and use rare power-ups to turn the fight around.</p></article>
-        </div>
+        <p class="mobile-swipe-hint" aria-hidden="true">Swipe to see more &#8594;</p>
       </section>
 
       <section id="play" class="play-section" aria-labelledby="play-title">
@@ -174,23 +176,27 @@
         <div class="prose">
           <p>
             Slither N' Slash is an independent arcade game built by <b>Postak Creations</b>. It combines the
-            familiar satisfaction of growing a snake with smooth steering, moving prey, enemy snakes, boost
-            management, and rare power-ups.
+            familiar satisfaction of growing a snake with smooth trail-following movement, rechargeable boost,
+            moving prey, solid centipede combat, body-loop trapping, glowing rewards, and rare power-ups.
           </p>
           <p>
-            The game is currently in active development. Future plans include more arena themes, additional
-            creatures and power-ups, expanded settings, accessibility improvements, and an optional leaderboard.
-            Features may change as the game is tested and improved.
+            Close any section of your body into a loop to trap enclosed creatures. Keep the loop closed for three
+            seconds while they slow down and turn orange; opening it early lets them recover and escape. Completed
+            transformations create stationary orange food that both you and centipedes can eat.
           </p>
-          <p class="version-badge">Current release: <b>v0.4.1</b></p>
+          <p>
+            The game is in active development. Planned additions include more arenas, creatures and power-ups,
+            expanded accessibility settings, balance improvements, and an optional leaderboard.
+          </p>
+          <p class="version-badge">Current release: <b>v0.5.0</b></p>
         </div>
       </section>
 
       <section id="news" class="content-section" aria-labelledby="news-title">
         <div class="section-heading"><p class="eyebrow">News &amp; changelog</p><h2 id="news-title">What's new</h2></div>
         <div class="changelog">
+          <article><time datetime="2026-07-04">July 4, 2026</time><h3>v0.5.0 — Trap &amp; Transform</h3><ul><li>Added body-loop traps for centipedes, grubs, mice, and poison beetles.</li><li>Trapped creatures now slow down, turn orange, and become stationary food after three seconds; breaking the loop lets them escape.</li><li>Reworked solid collisions, centipede bites, and trail-following snake movement.</li><li>Fireballs now burn only poison beetles into orange rewards, while Golden Mice activate Berserker mode.</li><li>Added two-second poison-beetle arrival protection and two-second post-Berserker recovery.</li><li>Improved mobile play mode, adjustable controls, page navigation, and responsive layouts.</li></ul></article>
           <article><time datetime="2026-07-03">July 3, 2026</time><h3>v0.4.1</h3><ul><li>Added the Golden Mouse and Berserker power-up.</li><li>Improved rival snake behavior.</li><li>Refined mobile controls and boost feedback.</li></ul></article>
-          <article><time datetime="2026-06-24">June 24, 2026</time><h3>v0.4.0</h3><ul><li>Introduced the dark rock arena.</li><li>Added moving prey and enemy snakes.</li><li>Improved responsive performance.</li></ul></article>
         </div>
       </section>
 
@@ -198,9 +204,11 @@
         <div class="section-heading"><p class="eyebrow">FAQ</p><h2 id="faq-title">Good things to know</h2></div>
         <div class="faq-list">
           <details><summary>Is Slither N' Slash free?</summary><p>Yes. The game is free to play in your browser and does not require an account.</p></details>
-          <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and boost control. For the best experience, rotate a smaller phone if you need more arena space.</p></details>
-          <details><summary>Can I save my progress?</summary><p>The game saves your high score in local storage on your current browser. Runs and high scores do not sync between devices.</p></details>
-          <details><summary>How do power-ups work?</summary><p>Rare targets appear during longer runs. Catching a fireball activates Berserker mode for a limited time, while rare prey can award extra points.</p></details>
+          <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and boost control. Landscape play provides the largest arena view, and you can pause to slide both control boxes to a comfortable height.</p></details>
+          <details><summary>Can I save my progress?</summary><p>Your high score is stored in this browser. A paused run remains available while the page stays open, but active runs and high scores do not sync between devices.</p></details>
+          <details><summary>How does trapping work?</summary><p>Make a closed loop with any part of your snake's body. Fully enclosed creatures slow and turn orange over three seconds. Keep the loop intact until they become orange balls; if it opens early, they recover and escape.</p></details>
+          <details><summary>How do power-ups work?</summary><p>The rare Golden Mouse activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>
+          <details><summary>What do poison beetles do?</summary><p>A poison beetle can reset your current run unless Berserker mode protects you. New beetles have a visible blue two-second arrival shield, and trapping or burning one converts it into safe food.</p></details>
           <details><summary>Do I need to create an account?</summary><p>No. Slither N' Slash currently has no user accounts and does not ask for personal information to play.</p></details>
         </div>
       </section>

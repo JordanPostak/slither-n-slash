@@ -112,6 +112,20 @@ body.is-berserker .game-shell {
   display: none;
 }
 
+body.is-berserker-recovery .berserker-status {
+  color: #dff8ff;
+  background: linear-gradient(180deg, rgba(17, 86, 112, 0.96), rgba(5, 31, 47, 0.98));
+  border-color: #73e2ff;
+  box-shadow:
+    0 0 18px rgba(88, 207, 255, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  animation: none;
+}
+
+body.is-berserker-recovery .berserker-status-icon {
+  color: #73e2ff;
+}
+
 .berserker-status-icon {
   color: #ffd43b;
   font-size: 1.15rem;
@@ -1034,8 +1048,25 @@ h2 {
   grid-template-columns: 1.05fr 0.95fr;
   align-items: center;
   gap: 60px;
-  min-height: calc(100vh - 72px);
+  min-height: calc(100svh - 84px);
   padding-top: 72px;
+}
+
+.preview-section,
+.how-to-section,
+#news,
+#faq {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100svh - 84px);
+}
+
+#about,
+.contact-section,
+.legal-section,
+.play-section {
+  min-height: calc(100svh - 84px);
 }
 
 .hero-description {
@@ -1151,6 +1182,10 @@ h2 {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+
+.mobile-swipe-hint {
+  display: none;
 }
 
 .preview-scene {
@@ -1625,8 +1660,19 @@ body.reduce-effects *::after {
     padding: 56px 0;
   }
 
+  .preview-section,
+  .how-to-section,
+  #about,
+  #news,
+  #faq,
+  .contact-section,
+  .legal-section,
+  .play-section {
+    min-height: calc(100svh - 66px);
+  }
+
   .hero {
-    min-height: 0;
+    min-height: calc(100svh - 66px);
     gap: 34px;
     padding-top: 46px;
     padding-bottom: 58px;
@@ -1695,6 +1741,64 @@ body.reduce-effects *::after {
   .changelog,
   .faq-list {
     grid-template-columns: 1fr;
+  }
+
+  .preview-grid {
+    grid-auto-flow: column;
+    grid-auto-columns: min(82vw, 320px);
+    grid-template-columns: none;
+    gap: 12px;
+    padding: 0 2px 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .game-preview {
+    scroll-snap-align: center;
+  }
+
+  .mobile-swipe-hint {
+    display: block;
+    margin: 8px 2px 0;
+    color: #a99f91;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  .instruction-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .instruction-grid article {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-content: start;
+    column-gap: 9px;
+    padding: 14px;
+  }
+
+  .instruction-grid article > span {
+    width: 28px;
+    height: 28px;
+    font-size: 0.76rem;
+  }
+
+  .instruction-grid h3 {
+    align-self: center;
+    margin: 0;
+    font-size: 0.84rem;
+  }
+
+  .instruction-grid p {
+    grid-column: 1 / -1;
+    margin: 9px 0 0;
+    font-size: 0.76rem;
+    line-height: 1.42;
   }
 
   .play-heading {
@@ -1783,6 +1887,17 @@ body.reduce-effects *::after {
     padding: 48px 0;
   }
 
+  .preview-section,
+  .how-to-section,
+  #about,
+  #news,
+  #faq,
+  .contact-section {
+    min-height: calc(100svh - 54px);
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
   .hero {
     grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
     gap: clamp(20px, 4vw, 48px);
@@ -1845,12 +1960,12 @@ body.reduce-effects *::after {
   }
 
   .preview-scene {
-    height: 140px;
+    height: 105px;
   }
 
   .game-preview figcaption {
-    padding: 15px;
-    font-size: 0.78rem;
+    padding: 10px;
+    font-size: 0.72rem;
   }
 
   .instruction-grid {

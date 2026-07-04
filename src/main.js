@@ -5,6 +5,7 @@ var score = 0
 var a = 0
 var segLength = 10
 var foods = []
+var centipedePoofs = []
 var fireball
 var nextFireballSpawnAt = 0
 var fireballLifetime = 10000
@@ -18,6 +19,9 @@ var goldenMouseSpawnMinDelay = 150000
 var goldenMouseSpawnMaxDelay = 240000
 var berserkerDuration = 10000
 var berserkerUntil = 0
+var berserkerRecoveryDuration = 2000
+var berserkerRecoveryUntil = 0
+var berserkerWasActive = false
 var berserkerSpeedMultiplier = 1.35
 var beetleBurnDuration = 1400
 var swallowRadius = 24
@@ -26,8 +30,10 @@ var mouseLifetime = 20000
 var grubSpawnInterval = 10000
 var mouseSpawnInterval = 20000
 var beetleSpawnInterval = 15000
+var poisonBeetleSpawnProtectionDuration = 2000
 var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
+var snakeTrail = []
 var steerTarget
 var steerAngleTarget
 var snakeHead = { x: 0, y: 0 }
@@ -71,6 +77,9 @@ var badSnakeMaxSpeed = 2.35
 var badSnakeTurnRate = 0.024
 var snakeBiteSegments = 3
 var snakeCutCooldown = 1650
+var snakeCornerCutStrength = 0.15
+var trappedCrushDuration = 3000
+var centipedePoofDuration = 460
 var wormHeadImage = new Image()
 var wormBodyImage = new Image()
 var gameAudioContext
@@ -78,6 +87,7 @@ var rivalAudioContext
 var scoreElement = document.getElementById('score')
 var highScoreElement = document.getElementById('high-score')
 var berserkerStatusElement = document.getElementById('berserker-status')
+var berserkerStatusLabelElement = document.querySelector('.berserker-status-label')
 var berserkerTimeElement = document.getElementById('berserker-time')
 var lastBerserkerSeconds = -1
 var highScore = getHighScore()
@@ -90,6 +100,7 @@ var mobileControls = {
 }
 var renderScale = 1
 var motionScale = 1
+var arenaMovementSpeedMultiplier = 0.8
 var soundEnabled = true
 
 // Mobile joystick controls
@@ -666,10 +677,9 @@ function init() {
       y: canvas.height / 2,
     }
 
-    for (var i = 0; i < x.length; i++) {
-      x[i] = snakeHead.x - i * segLength
-      y[i] = snakeHead.y
-    }
+    resetSnakeBody()
+  } else if (snakeTrail.length === 0) {
+    resetSnakeBody()
   }
 
   updateHighScoreDisplay()
@@ -1039,6 +1049,7 @@ function generateFood(foodType) {
     pauseUntil: 0,
     nextTurnAt: Date.now() + 500 + Math.random() * 1300,
     fleeEnergy: mouseFleeStamina,
+    spawnProtectionUntil: 0,
   }
 }
 
@@ -1136,13 +1147,33 @@ function animate() {
       updateFireball()
       updateGoldenMouse()
       moveSnakeHead()
-      updateBadSnakes()
+      var snakeTrapLoops = getSnakeTrapLoops()
+      updateTrappedFoods(snakeTrapLoops)
+      updateBadSnakes(snakeTrapLoops)
+      updateCentipedePoofs()
       applyEntityBounces()
 
       for (var i = 0; i < foods.length; i++) {
         var entitySwallowRadius = foods[i].swallowRadius || swallowRadius
 
         if (isSnakeTouchingEntity(foods[i], entitySwallowRadius)) {
+          if (foods[i].isTrapped || foods[i].crushStartedAt) {
+            drawFood(foods[i])
+            continue
+          }
+
+          if (isPoisonBeetleSpawnProtected(foods[i])) {
+            repelEntityFromSnake(foods[i], entitySwallowRadius + 12 * renderScale)
+            drawFood(foods[i])
+            continue
+          }
+
+          if (isBerserkerRecoveryActive()) {
+            repelEntityFromSnake(foods[i], entitySwallowRadius + 12 * renderScale)
+            drawFood(foods[i])
+            continue
+          }
+
           if (foods[i].isBurning) {
             drawFood(foods[i])
             continue
@@ -1180,9 +1211,14 @@ function animate() {
 
       if (fireball) {
         if (isSnakeTouchingEntity(fireball, 22 * renderScale)) {
-          burnPoisonBeetles()
-          fireball = undefined
-          scheduleNextFireball()
+          if (isBerserkerRecoveryActive()) {
+            repelEntityFromSnake(fireball, 34 * renderScale)
+            drawFireball(fireball)
+          } else {
+            burnPoisonBeetles()
+            fireball = undefined
+            scheduleNextFireball()
+          }
         } else {
           drawFireball(fireball)
         }
@@ -1191,17 +1227,22 @@ function animate() {
 
       if (goldenMouse) {
         if (isSnakeTouchingEntity(goldenMouse, 24 * renderScale)) {
-          activateBerserker()
-          goldenMouse = undefined
-          scheduleNextGoldenMouse()
-          playGameSound('eat')
+          if (isBerserkerRecoveryActive()) {
+            repelEntityFromSnake(goldenMouse, 36 * renderScale)
+            drawGoldenMouse(goldenMouse)
+          } else {
+            activateBerserker()
+            goldenMouse = undefined
+            scheduleNextGoldenMouse()
+            playGameSound('eat')
+          }
         } else {
           drawGoldenMouse(goldenMouse)
         }
       }
 
       drawBerserkerAura()
-      drawSnake(snakeHead.x, snakeHead.y)
+      drawSnake()
     }
 
     animationRequestId = requestAnimationFrame(animate)
@@ -1209,13 +1250,97 @@ function animate() {
 }
 
 function drawFood(food) {
-  if (food.isBad) {
+  if (food.type === 'centipede-orb') {
+    drawCentipedeOrb(food)
+  } else if (food.isBad) {
     drawBadFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, food.isBurning)
   } else if (food.type === 'grub') {
     drawGrubFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle)
   } else {
     drawGoodFood(food.x + 6 * renderScale, food.y + 5 * renderScale, food.facingAngle, isEntityMoving(food))
   }
+
+  if (food.crushProgress > 0 && food.type !== 'centipede-orb') {
+    drawFoodCrushTransformation(food)
+  }
+
+  if (isPoisonBeetleSpawnProtected(food)) {
+    drawPoisonBeetleSpawnProtection(food)
+  }
+}
+
+function isPoisonBeetleSpawnProtected(food) {
+  return Boolean(food && food.isBad && food.spawnProtectionUntil > Date.now())
+}
+
+function drawPoisonBeetleSpawnProtection(food) {
+  var remaining = Math.max(0, food.spawnProtectionUntil - Date.now())
+  var progress = remaining / poisonBeetleSpawnProtectionDuration
+  var pulse = 1 + Math.sin(Date.now() * 0.018) * 0.08
+
+  ctx.save()
+  ctx.strokeStyle = 'rgba(107, 218, 255, ' + (0.35 + progress * 0.45) + ')'
+  ctx.lineWidth = 2 * renderScale
+  ctx.setLineDash([4 * renderScale, 3 * renderScale])
+  ctx.beginPath()
+  ctx.arc(food.x + 6 * renderScale, food.y + 5 * renderScale, 18 * renderScale * pulse, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawFoodCrushTransformation(food) {
+  var progress = food.crushProgress || 0
+  var pulse = 1 + Math.sin(Date.now() * 0.018) * 0.08 * progress
+  var radius = 8 * renderScale * pulse
+
+  ctx.save()
+  ctx.globalAlpha = progress
+  ctx.fillStyle = 'rgba(255, 116, 25, 0.24)'
+  ctx.beginPath()
+  ctx.arc(food.x, food.y, radius * 1.7, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ff8128'
+  ctx.beginPath()
+  ctx.arc(food.x, food.y, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ffd071'
+  ctx.beginPath()
+  ctx.arc(food.x - radius * 0.25, food.y - radius * 0.25, radius * 0.32, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 154, 61, 0.9)'
+  ctx.lineWidth = 2 * renderScale
+  ctx.beginPath()
+  ctx.arc(food.x, food.y, 14 * renderScale, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawCentipedeOrb(orb) {
+  var pulse = 0.86 + Math.sin(Date.now() * 0.014 + (orb.pulseOffset || 0)) * 0.14
+  var radius = 7 * renderScale * pulse
+
+  ctx.save()
+  ctx.translate(orb.x, orb.y)
+  ctx.fillStyle = 'rgba(255, 111, 22, 0.18)'
+  ctx.beginPath()
+  ctx.arc(0, 0, radius * 2.1, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255, 138, 36, 0.42)'
+  ctx.beginPath()
+  ctx.arc(0, 0, radius * 1.45, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ff8a24'
+  ctx.beginPath()
+  ctx.arc(0, 0, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ffd071'
+  ctx.beginPath()
+  ctx.arc(-2 * renderScale, -2 * renderScale, radius * 0.42, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
 }
 
 function drawGoldenMouse(mouse) {
@@ -1330,6 +1455,29 @@ function isSnakeTouchingEntity(entity, radius) {
   var dx = snakeHead.x - entity.x
   var dy = snakeHead.y - entity.y
   return dx * dx + dy * dy < radius * radius
+}
+
+function repelEntityFromSnake(entity, minimumDistance) {
+  var dx = entity.x - snakeHead.x
+  var dy = entity.y - snakeHead.y
+  var distance = Math.sqrt(dx * dx + dy * dy)
+
+  if (distance < 0.001) {
+    dx = -Math.cos(headingAngle)
+    dy = -Math.sin(headingAngle)
+    distance = 1
+  }
+
+  var normalX = dx / distance
+  var normalY = dy / distance
+  var pushSpeed = 4.2 * motionScale
+
+  entity.x = snakeHead.x + normalX * minimumDistance
+  entity.y = snakeHead.y + normalY * minimumDistance
+  entity.dx = normalX * pushSpeed
+  entity.dy = normalY * pushSpeed
+  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+  entity.pauseUntil = 0
 }
 
 function isEntityInsideArena(entity, padding) {
@@ -1772,8 +1920,11 @@ function scheduleNextGoldenMouse() {
 
 function activateBerserker() {
   berserkerUntil = Date.now() + berserkerDuration
+  berserkerRecoveryUntil = 0
+  berserkerWasActive = true
   lastBerserkerSeconds = -1
   document.body.classList.add('is-berserker')
+  document.body.classList.remove('is-berserker-recovery')
   calmMiceForBerserker()
   updateBerserkerStatus()
 }
@@ -1792,19 +1943,49 @@ function isBerserkerActive() {
   return Date.now() < berserkerUntil
 }
 
+function isBerserkerRecoveryActive() {
+  return Date.now() < berserkerRecoveryUntil
+}
+
 function updateBerserkerStatus() {
-  var remaining = Math.max(0, berserkerUntil - Date.now())
+  var now = Date.now()
+  var remaining = Math.max(0, berserkerUntil - now)
 
   if (remaining <= 0) {
     document.body.classList.remove('is-berserker')
+
+    if (berserkerWasActive) {
+      berserkerRecoveryUntil = now + berserkerRecoveryDuration
+      berserkerWasActive = false
+      lastBerserkerSeconds = -1
+    }
+
+    var recoveryRemaining = Math.max(0, berserkerRecoveryUntil - now)
+    if (recoveryRemaining > 0) {
+      var recoverySeconds = Math.ceil(recoveryRemaining / 1000)
+      document.body.classList.add('is-berserker-recovery')
+      if (berserkerStatusElement) berserkerStatusElement.hidden = false
+      if (berserkerStatusLabelElement) berserkerStatusLabelElement.textContent = 'Recovery'
+
+      if (berserkerTimeElement && recoverySeconds !== lastBerserkerSeconds) {
+        berserkerTimeElement.textContent = recoverySeconds
+        lastBerserkerSeconds = recoverySeconds
+      }
+      return
+    }
+
+    document.body.classList.remove('is-berserker-recovery')
     if (berserkerStatusElement) berserkerStatusElement.hidden = true
+    if (berserkerStatusLabelElement) berserkerStatusLabelElement.textContent = 'Berserker'
     lastBerserkerSeconds = -1
     return
   }
 
   var seconds = Math.ceil(remaining / 1000)
   document.body.classList.add('is-berserker')
+  document.body.classList.remove('is-berserker-recovery')
   if (berserkerStatusElement) berserkerStatusElement.hidden = false
+  if (berserkerStatusLabelElement) berserkerStatusLabelElement.textContent = 'Berserker'
 
   if (berserkerTimeElement && seconds !== lastBerserkerSeconds) {
     berserkerTimeElement.textContent = seconds
@@ -1813,18 +1994,25 @@ function updateBerserkerStatus() {
 }
 
 function drawBerserkerAura() {
-  if (!isBerserkerActive()) return
+  var recoveryActive = isBerserkerRecoveryActive()
+  if (!isBerserkerActive() && !recoveryActive) return
 
   var pulse = 1 + Math.sin(Date.now() * 0.015) * 0.12
 
   ctx.save()
-  ctx.strokeStyle = 'rgba(255, 210, 55, 0.72)'
-  ctx.fillStyle = 'rgba(255, 155, 20, 0.1)'
+  ctx.strokeStyle = recoveryActive ? 'rgba(115, 226, 255, 0.78)' : 'rgba(255, 210, 55, 0.72)'
+  ctx.fillStyle = recoveryActive ? 'rgba(80, 192, 255, 0.09)' : 'rgba(255, 155, 20, 0.1)'
   ctx.lineWidth = 3 * renderScale
-  ctx.shadowColor = '#ffb515'
+  ctx.shadowColor = recoveryActive ? '#58cfff' : '#ffb515'
   ctx.shadowBlur = 18 * renderScale
   ctx.beginPath()
-  ctx.arc(snakeHead.x, snakeHead.y, 22 * renderScale * pulse, 0, Math.PI * 2)
+  ctx.arc(
+    snakeHead.x,
+    snakeHead.y,
+    (recoveryActive ? 26 : 22) * renderScale * pulse,
+    0,
+    Math.PI * 2
+  )
   ctx.fill()
   ctx.stroke()
   ctx.restore()
@@ -1845,7 +2033,6 @@ function getActiveBeetleCount() {
 function burnPoisonBeetles() {
   var now = Date.now()
   var burnedBeetles = false
-  var burnedRivals = false
 
   for (var i = 0; i < foods.length; i++) {
     if (foods[i].isBad && !foods[i].isBurning) {
@@ -1856,19 +2043,6 @@ function burnPoisonBeetles() {
       foods[i].pauseUntil = foods[i].burnUntil
       burnedBeetles = true
     }
-  }
-
-  for (var rivalIndex = 0; rivalIndex < badSnakes.length; rivalIndex++) {
-    if (!badSnakes[rivalIndex].isBurning) {
-      badSnakes[rivalIndex].isBurning = true
-      badSnakes[rivalIndex].burnUntil = now + beetleBurnDuration
-      badSnakes[rivalIndex].cutCooldownUntil = badSnakes[rivalIndex].burnUntil
-      burnedRivals = true
-    }
-  }
-
-  if (burnedRivals) {
-    playRivalSound('burn')
   }
 
   if (burnedBeetles) {
@@ -1950,6 +2124,8 @@ function moveSnakeHead() {
   }
 
   applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
+  updateSnakeBodyFromTrail()
 }
 
 function applyKeyboardControls() {
@@ -2360,7 +2536,7 @@ function createBadSnake(index) {
   return enemySnake
 }
 
-function updateBadSnakes() {
+function updateBadSnakes(snakeTrapLoops) {
   for (var i = 0; i < badSnakes.length; i++) {
     var enemySnake = badSnakes[i]
 
@@ -2377,7 +2553,7 @@ function updateBadSnakes() {
 
     updateBadSnake(enemySnake)
     handleBadSnakeFood(enemySnake)
-    handleBadSnakeCuts(enemySnake)
+    handleBadSnakeCuts(enemySnake, snakeTrapLoops)
 
     if (badSnakes.indexOf(enemySnake) === -1) {
       i--
@@ -2450,7 +2626,13 @@ function getBadSnakeSpeed(enemySnake) {
   var lengthSpeed = enemyExtraLength * badSnakeSpeedPerSegment
   var playerPressureSpeed = playerExtraLength * badSnakePlayerSpeedPerSegment
 
-  return Math.min(badSnakeMaxSpeed, (badSnakeBaseSpeed + lengthSpeed + playerPressureSpeed) * motionScale)
+  var crushProgress = enemySnake.crushProgress || 0
+  var crushSpeedScale = 1 - crushProgress * 0.9
+
+  return Math.min(
+    badSnakeMaxSpeed,
+    (badSnakeBaseSpeed + lengthSpeed + playerPressureSpeed) * motionScale
+  ) * crushSpeedScale
 }
 
 function getBadSnakeTarget(enemySnake) {
@@ -2548,10 +2730,48 @@ function growBadSnake(enemySnake, count) {
   }
 }
 
-function handleBadSnakeCuts(enemySnake) {
+function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   var now = Date.now()
+  var enclosingTrapLoop = getBadSnakeTrapLoop(enemySnake, snakeTrapLoops)
+  var centipedeIsTrapped = Boolean(enclosingTrapLoop)
+  enemySnake.isTrapped = centipedeIsTrapped
+  enemySnake.trapLoopArea = enclosingTrapLoop ? enclosingTrapLoop.area : 0
 
-  if (isBerserkerActive()) {
+  if (updateTrappedCrush(enemySnake, enclosingTrapLoop, now)) return
+  centipedeIsTrapped = Boolean(enclosingTrapLoop)
+  enemySnake.isTrapped = centipedeIsTrapped
+
+  if (isBerserkerRecoveryActive() && !centipedeIsTrapped) {
+    var recoveryPlayerHitIndex = getPlayerBodyHitIndex(
+      enemySnake.head.x,
+      enemySnake.head.y,
+      15 * renderScale
+    )
+    var recoveryEnemyHitIndex = getEnemyBodyHitIndex(
+      enemySnake,
+      snakeHead.x,
+      snakeHead.y,
+      18 * renderScale
+    )
+    var recoveryHeadHit = arePointsTouching(
+      snakeHead.x,
+      snakeHead.y,
+      enemySnake.head.x,
+      enemySnake.head.y,
+      18 * renderScale
+    )
+
+    if (recoveryPlayerHitIndex >= 0 || recoveryEnemyHitIndex >= 0 || recoveryHeadHit) {
+      repelBadSnakeDuringRecovery(
+        enemySnake,
+        recoveryPlayerHitIndex,
+        recoveryEnemyHitIndex
+      )
+    }
+    return
+  }
+
+  if (isBerserkerActive() && !centipedeIsTrapped) {
     var centipedeHitPlayer = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale) >= 0
     var playerHitCentipede = (
       getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 17 * renderScale) >= 0 ||
@@ -2564,31 +2784,555 @@ function handleBadSnakeCuts(enemySnake) {
     return
   }
 
-  if (now >= enemySnake.cutCooldownUntil) {
-    var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale)
-
+  var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 15 * renderScale)
+  var enemyHitIndex = getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 17 * renderScale)
+  var headsColliding = arePointsTouching(
+    snakeHead.x,
+    snakeHead.y,
+    enemySnake.head.x,
+    enemySnake.head.y,
+    18 * renderScale
+  )
+  if (centipedeIsTrapped) {
     if (playerHitIndex >= 0) {
-      var stolenPlayerSegments = removePlayerSegments(snakeBiteSegments)
-      if (stolenPlayerSegments) {
-        growBadSnake(enemySnake, stolenPlayerSegments)
+      nudgeTrappedBadSnake(enemySnake, x[playerHitIndex], y[playerHitIndex])
+    }
+
+    if (enemyHitIndex >= 0) {
+      var trappedEnemyContact = enemySnake.segments[enemyHitIndex]
+      nudgeTrappedBadSnake(
+        enemySnake,
+        snakeHead.x,
+        snakeHead.y,
+        trappedEnemyContact.x,
+        trappedEnemyContact.y
+      )
+    } else if (headsColliding) {
+      nudgeTrappedBadSnake(
+        enemySnake,
+        snakeHead.x,
+        snakeHead.y,
+        enemySnake.head.x,
+        enemySnake.head.y
+      )
+    }
+
+    return
+  }
+
+  if (now < enemySnake.cutCooldownUntil) {
+    if (playerHitIndex >= 0) {
+      bounceBadSnakeOffPlayer(enemySnake, x[playerHitIndex], y[playerHitIndex])
+    } else if (enemyHitIndex >= 0) {
+      bouncePlayerOffBadSnake(
+        enemySnake.segments[enemyHitIndex].x,
+        enemySnake.segments[enemyHitIndex].y
+      )
+    } else if (headsColliding) {
+      bounceSnakeHeadsApart(enemySnake)
+    }
+    return
+  }
+
+  if (playerHitIndex >= 0) {
+    var playerContactX = x[playerHitIndex]
+    var playerContactY = y[playerHitIndex]
+    var stolenPlayerSegments = removePlayerSegments(snakeBiteSegments)
+    if (stolenPlayerSegments) {
+      growBadSnake(enemySnake, stolenPlayerSegments)
+    }
+
+    bounceBadSnakeOffPlayer(enemySnake, playerContactX, playerContactY)
+    enemySnake.cutCooldownUntil = now + snakeCutCooldown
+    playGameSound('hurt')
+    return
+  }
+
+  if (enemyHitIndex >= 0) {
+    var enemyContactX = enemySnake.segments[enemyHitIndex].x
+    var enemyContactY = enemySnake.segments[enemyHitIndex].y
+    var recoveredSegments = removeBadSnakeSegments(enemySnake, snakeBiteSegments)
+    addPlayerSegments(recoveredSegments)
+
+    if (badSnakes.indexOf(enemySnake) !== -1) {
+      bouncePlayerOffBadSnake(enemyContactX, enemyContactY)
+      enemySnake.cutCooldownUntil = now + snakeCutCooldown
+    }
+
+    playGameSound('eat')
+    return
+  }
+
+  if (headsColliding) {
+    bounceSnakeHeadsApart(enemySnake)
+  }
+}
+
+function updateTrappedCrush(enemySnake, trapLoop, now) {
+  if (!trapLoop) {
+    enemySnake.crushStartedAt = 0
+    enemySnake.crushProgress = 0
+    return false
+  }
+
+  if (!enemySnake.crushStartedAt) enemySnake.crushStartedAt = now
+  enemySnake.crushProgress = Math.min(1, (now - enemySnake.crushStartedAt) / trappedCrushDuration)
+
+  if (enemySnake.crushProgress < 1) return false
+
+  crushBadSnake(enemySnake)
+  return true
+}
+
+function updateTrappedFoods(snakeTrapLoops) {
+  var now = Date.now()
+
+  for (var i = foods.length - 1; i >= 0; i--) {
+    var food = foods[i]
+    if (food.type === 'centipede-orb') continue
+
+    var trapLoop = getPointTrapLoop(food.x, food.y, snakeTrapLoops)
+    food.trapLoopArea = trapLoop ? trapLoop.area : 0
+
+    if (trapLoop) {
+      if (food.expiresAt) {
+        food.trapRemainingLifetime = Math.max(1000, food.expiresAt - now)
+      } else if (food.leavingArena && !food.trapRemainingLifetime) {
+        food.trapRemainingLifetime = 5000
       }
 
-      enemySnake.cutCooldownUntil = now + snakeCutCooldown
-      playGameSound('hurt')
-      return
+      food.expiresAt = 0
+      food.leavingArena = false
+      food.enteringArena = false
+    } else if (food.trapRemainingLifetime) {
+      food.expiresAt = now + food.trapRemainingLifetime
+      food.trapRemainingLifetime = 0
+    }
+
+    if (updateTrappedFoodCrush(food, trapLoop, now)) {
+      foods[i] = createOrangeRewardOrb(food, Math.max(1, food.growthValue || 1))
+    } else {
+      food.isTrapped = Boolean(trapLoop)
+    }
+  }
+}
+
+function updateTrappedFoodCrush(food, trapLoop, now) {
+  if (!trapLoop) {
+    food.crushStartedAt = 0
+    food.crushProgress = 0
+    return false
+  }
+
+  if (!food.crushStartedAt) food.crushStartedAt = now
+  food.crushProgress = Math.min(1, (now - food.crushStartedAt) / trappedCrushDuration)
+
+  if (food.crushProgress < 1) return false
+
+  spawnOrangePoof([{ x: food.x, y: food.y }])
+  return true
+}
+
+function nudgeTrappedBadSnake(enemySnake, contactX, contactY, enemyContactX, enemyContactY) {
+  if (!Number.isFinite(enemyContactX) || !Number.isFinite(enemyContactY)) {
+    enemyContactX = enemySnake.head.x
+    enemyContactY = enemySnake.head.y
+  }
+
+  var normal = getCollisionNormal(
+    enemyContactX - contactX,
+    enemyContactY - contactY,
+    enemySnake.heading
+  )
+
+  moveBadSnake(enemySnake, normal.x * 2.5 * renderScale, normal.y * 2.5 * renderScale)
+  enemySnake.heading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
+  enemySnake.wanderAngle = enemySnake.heading
+  enemySnake.nextWanderAt = Date.now() + 350
+}
+
+function crushBadSnake(enemySnake) {
+  spawnCentipedePoof(enemySnake)
+  spawnCentipedeOrbs(enemySnake)
+  removeBadSnake(enemySnake)
+  playGameSound('eat')
+}
+
+function spawnCentipedePoof(enemySnake) {
+  spawnOrangePoof([enemySnake.head].concat(enemySnake.segments))
+}
+
+function spawnOrangePoof(points) {
+  var centerX = 0
+  var centerY = 0
+
+  for (var i = 0; i < points.length; i++) {
+    centerX += points[i].x
+    centerY += points[i].y
+  }
+
+  centipedePoofs.push({
+    x: centerX / points.length,
+    y: centerY / points.length,
+    startedAt: Date.now(),
+    particles: points.map(function (point, index) {
+      var angle = Math.atan2(point.y - centerY / points.length, point.x - centerX / points.length)
+      if (!Number.isFinite(angle)) angle = index / points.length * Math.PI * 2
+
+      return {
+        x: point.x,
+        y: point.y,
+        angle: angle,
+        speed: 9 + Math.random() * 9,
+      }
+    }),
+  })
+}
+
+function updateCentipedePoofs() {
+  var now = Date.now()
+
+  for (var i = centipedePoofs.length - 1; i >= 0; i--) {
+    var poof = centipedePoofs[i]
+    var progress = (now - poof.startedAt) / centipedePoofDuration
+
+    if (progress >= 1) {
+      centipedePoofs.splice(i, 1)
+      continue
+    }
+
+    var alpha = 1 - progress
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 154, 61, ' + alpha * 0.75 + ')'
+    ctx.lineWidth = 3 * renderScale * alpha
+    ctx.beginPath()
+    ctx.arc(poof.x, poof.y, (12 + progress * 32) * renderScale, 0, Math.PI * 2)
+    ctx.stroke()
+
+    for (var particleIndex = 0; particleIndex < poof.particles.length; particleIndex++) {
+      var particle = poof.particles[particleIndex]
+      var travel = particle.speed * progress * renderScale
+
+      ctx.fillStyle = 'rgba(255, 176, 72, ' + alpha + ')'
+      ctx.beginPath()
+      ctx.arc(
+        particle.x + Math.cos(particle.angle) * travel,
+        particle.y + Math.sin(particle.angle) * travel,
+        (2.5 + alpha * 2.5) * renderScale,
+        0,
+        Math.PI * 2
+      )
+      ctx.fill()
+    }
+
+    ctx.restore()
+  }
+}
+
+function spawnCentipedeOrbs(enemySnake) {
+  var rewardPoints = enemySnake.segments.slice()
+
+  if (rewardPoints.length === 0) rewardPoints.push(enemySnake.head)
+
+  for (var i = 0; i < rewardPoints.length; i++) {
+    foods.push(createOrangeRewardOrb(rewardPoints[i], 1))
+  }
+}
+
+function createOrangeRewardOrb(source, growthValue) {
+  return {
+    x: source.x,
+    y: source.y,
+    dx: 0,
+    dy: 0,
+    facingAngle: 0,
+    type: 'centipede-orb',
+    growthValue: growthValue,
+    swallowRadius: 17 * renderScale,
+    expiresAt: 0,
+    isBad: false,
+    initialized: true,
+    enteringArena: false,
+    leavingArena: false,
+    pauseUntil: 0,
+    nextTurnAt: 0,
+    pulseOffset: Math.random() * Math.PI * 2,
+  }
+}
+
+function bounceBadSnakeOffPlayer(enemySnake, contactX, contactY) {
+  var normal = getCollisionNormal(
+    enemySnake.head.x - contactX,
+    enemySnake.head.y - contactY,
+    enemySnake.heading
+  )
+  var separation = 24 * renderScale
+  var distance = Math.hypot(enemySnake.head.x - contactX, enemySnake.head.y - contactY)
+  var pushDistance = Math.max(5 * renderScale, separation - distance)
+  var reflectedHeading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
+
+  moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
+  enemySnake.heading = reflectedHeading
+  enemySnake.wanderAngle = reflectedHeading
+  enemySnake.nextWanderAt = Date.now() + 650
+}
+
+function getSnakeTrapLoops() {
+  var snakePoints = [{ x: snakeHead.x, y: snakeHead.y }]
+  var minimumPointSeparation = Math.max(8, Math.ceil(70 * renderScale / segLength))
+  var closureDistance = 27 * renderScale
+  var closureDistanceSquared = closureDistance * closureDistance
+  var minimumCandidateArea = 520 * renderScale * renderScale
+  var bucketSize = closureDistance
+  var pointBuckets = {}
+  var trapLoops = []
+
+  for (var bodyIndex = 0; bodyIndex < x.length; bodyIndex++) {
+    snakePoints.push({ x: x[bodyIndex], y: y[bodyIndex] })
+  }
+
+  for (var endIndex = 0; endIndex < snakePoints.length; endIndex++) {
+    var endPoint = snakePoints[endIndex]
+    var bucketX = Math.floor(endPoint.x / bucketSize)
+    var bucketY = Math.floor(endPoint.y / bucketSize)
+
+    for (var offsetX = -1; offsetX <= 1; offsetX++) {
+      for (var offsetY = -1; offsetY <= 1; offsetY++) {
+        var nearbyIndexes = pointBuckets[(bucketX + offsetX) + ':' + (bucketY + offsetY)] || []
+
+        for (var nearbyIndex = 0; nearbyIndex < nearbyIndexes.length; nearbyIndex++) {
+          var startIndex = nearbyIndexes[nearbyIndex]
+          if (endIndex - startIndex < minimumPointSeparation) continue
+
+          var startPoint = snakePoints[startIndex]
+          var closureDx = endPoint.x - startPoint.x
+          var closureDy = endPoint.y - startPoint.y
+          if (closureDx * closureDx + closureDy * closureDy > closureDistanceSquared) continue
+
+          var trapPolygon = snakePoints.slice(startIndex, endIndex + 1)
+          var loopArea = Math.abs(getPolygonArea(trapPolygon))
+          if (loopArea < minimumCandidateArea) continue
+
+          trapLoops.push(createTrapLoop(trapPolygon, loopArea))
+        }
+      }
+    }
+
+    var bucketKey = bucketX + ':' + bucketY
+    if (!pointBuckets[bucketKey]) pointBuckets[bucketKey] = []
+    pointBuckets[bucketKey].push(endIndex)
+  }
+
+  return trapLoops
+}
+
+function createTrapLoop(polygon, area) {
+  var bounds = {
+    left: polygon[0].x,
+    right: polygon[0].x,
+    top: polygon[0].y,
+    bottom: polygon[0].y,
+  }
+
+  for (var i = 1; i < polygon.length; i++) {
+    bounds.left = Math.min(bounds.left, polygon[i].x)
+    bounds.right = Math.max(bounds.right, polygon[i].x)
+    bounds.top = Math.min(bounds.top, polygon[i].y)
+    bounds.bottom = Math.max(bounds.bottom, polygon[i].y)
+  }
+
+  return {
+    polygon: polygon,
+    area: area,
+    bounds: bounds,
+  }
+}
+
+function getBadSnakeTrapLoop(enemySnake, snakeTrapLoops) {
+  var minimumLoopArea = 520 * renderScale * renderScale
+  var smallestEnclosingLoop
+
+  for (var loopIndex = 0; loopIndex < snakeTrapLoops.length; loopIndex++) {
+    var trapLoop = snakeTrapLoops[loopIndex]
+    if (trapLoop.area < minimumLoopArea) continue
+    if (smallestEnclosingLoop && trapLoop.area >= smallestEnclosingLoop.area) continue
+    if (!isPointInsideTrapLoop(enemySnake.head.x, enemySnake.head.y, trapLoop)) continue
+
+    var allSegmentsInside = true
+    for (var segmentIndex = 0; segmentIndex < enemySnake.segments.length; segmentIndex++) {
+      var segment = enemySnake.segments[segmentIndex]
+      if (!isPointInsideTrapLoop(segment.x, segment.y, trapLoop)) {
+        allSegmentsInside = false
+        break
+      }
+    }
+
+    if (allSegmentsInside) smallestEnclosingLoop = trapLoop
+  }
+
+  return smallestEnclosingLoop
+}
+
+function getPointTrapLoop(pointX, pointY, snakeTrapLoops) {
+  var smallestEnclosingLoop
+
+  for (var loopIndex = 0; loopIndex < snakeTrapLoops.length; loopIndex++) {
+    var trapLoop = snakeTrapLoops[loopIndex]
+    if (smallestEnclosingLoop && trapLoop.area >= smallestEnclosingLoop.area) continue
+    if (!isPointInsideTrapLoop(pointX, pointY, trapLoop)) continue
+
+    smallestEnclosingLoop = trapLoop
+  }
+
+  return smallestEnclosingLoop
+}
+
+function isPointInsideTrapLoop(pointX, pointY, trapLoop) {
+  var bounds = trapLoop.bounds
+
+  if (
+    pointX < bounds.left ||
+    pointX > bounds.right ||
+    pointY < bounds.top ||
+    pointY > bounds.bottom
+  ) {
+    return false
+  }
+
+  return isPointInsidePolygon(pointX, pointY, trapLoop.polygon)
+}
+
+function getPolygonArea(points) {
+  var area = 0
+
+  for (var i = 0; i < points.length; i++) {
+    var nextIndex = (i + 1) % points.length
+    area += points[i].x * points[nextIndex].y - points[nextIndex].x * points[i].y
+  }
+
+  return area / 2
+}
+
+function isPointInsidePolygon(pointX, pointY, polygon) {
+  var inside = false
+
+  for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    var firstPoint = polygon[i]
+    var secondPoint = polygon[j]
+    var crossesRay = (firstPoint.y > pointY) !== (secondPoint.y > pointY) &&
+      pointX < (secondPoint.x - firstPoint.x) * (pointY - firstPoint.y) /
+        (secondPoint.y - firstPoint.y) + firstPoint.x
+
+    if (crossesRay) inside = !inside
+  }
+
+  return inside
+}
+
+function bouncePlayerOffBadSnake(contactX, contactY) {
+  var normal = getCollisionNormal(
+    snakeHead.x - contactX,
+    snakeHead.y - contactY,
+    headingAngle
+  )
+  var separation = 26 * renderScale
+  var distance = Math.hypot(snakeHead.x - contactX, snakeHead.y - contactY)
+
+  snakeHead.x += normal.x * Math.max(6 * renderScale, separation - distance)
+  snakeHead.y += normal.y * Math.max(6 * renderScale, separation - distance)
+  headingAngle = getReflectedHeading(headingAngle, normal.x, normal.y)
+  steerTarget = undefined
+  steerAngleTarget = undefined
+  applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
+  updateSnakeBodyFromTrail()
+}
+
+function bounceSnakeHeadsApart(enemySnake) {
+  var normal = getCollisionNormal(
+    snakeHead.x - enemySnake.head.x,
+    snakeHead.y - enemySnake.head.y,
+    headingAngle
+  )
+  var pushDistance = 10 * renderScale
+
+  snakeHead.x += normal.x * pushDistance
+  snakeHead.y += normal.y * pushDistance
+  moveBadSnake(enemySnake, -normal.x * pushDistance, -normal.y * pushDistance)
+
+  headingAngle = getReflectedHeading(headingAngle, normal.x, normal.y)
+  enemySnake.heading = getReflectedHeading(enemySnake.heading, -normal.x, -normal.y)
+  enemySnake.wanderAngle = enemySnake.heading
+  enemySnake.nextWanderAt = Date.now() + 500
+  steerTarget = undefined
+  steerAngleTarget = undefined
+  applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
+  updateSnakeBodyFromTrail()
+}
+
+function getCollisionNormal(dx, dy, incomingHeading) {
+  var distance = Math.sqrt(dx * dx + dy * dy)
+
+  if (distance < 0.001) {
+    return {
+      x: -Math.cos(incomingHeading),
+      y: -Math.sin(incomingHeading),
     }
   }
 
-  if (now < enemySnake.cutCooldownUntil) return
-
-  var enemyHitIndex = getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 15 * renderScale)
-
-  if (enemyHitIndex >= 0) {
-    var recoveredSegments = removeBadSnakeSegments(enemySnake, snakeBiteSegments)
-    addPlayerSegments(recoveredSegments)
-    enemySnake.cutCooldownUntil = now + snakeCutCooldown
-    playGameSound('eat')
+  return {
+    x: dx / distance,
+    y: dy / distance,
   }
+}
+
+function getReflectedHeading(incomingHeading, normalX, normalY) {
+  var velocityX = Math.cos(incomingHeading)
+  var velocityY = Math.sin(incomingHeading)
+  var velocityAlongNormal = velocityX * normalX + velocityY * normalY
+
+  if (velocityAlongNormal >= 0) {
+    return Math.atan2(normalY, normalX)
+  }
+
+  var reflectedX = velocityX - 2 * velocityAlongNormal * normalX
+  var reflectedY = velocityY - 2 * velocityAlongNormal * normalY
+  return Math.atan2(reflectedY, reflectedX)
+}
+
+function repelBadSnakeDuringRecovery(enemySnake, playerHitIndex, enemyHitIndex) {
+  var collisionX = snakeHead.x
+  var collisionY = snakeHead.y
+  var enemyContactX = enemySnake.head.x
+  var enemyContactY = enemySnake.head.y
+
+  if (playerHitIndex >= 0) {
+    collisionX = x[playerHitIndex]
+    collisionY = y[playerHitIndex]
+  } else if (enemyHitIndex >= 0) {
+    enemyContactX = enemySnake.segments[enemyHitIndex].x
+    enemyContactY = enemySnake.segments[enemyHitIndex].y
+  }
+
+  var dx = enemyContactX - collisionX
+  var dy = enemyContactY - collisionY
+  var distance = Math.sqrt(dx * dx + dy * dy)
+
+  if (distance < 0.001) {
+    dx = -Math.cos(headingAngle)
+    dy = -Math.sin(headingAngle)
+    distance = 1
+  }
+
+  var normalX = dx / distance
+  var normalY = dy / distance
+  var pushDistance = 20 * renderScale
+
+  moveBadSnake(enemySnake, normalX * pushDistance, normalY * pushDistance)
+  enemySnake.heading = Math.atan2(normalY, normalX)
+  enemySnake.wanderAngle = enemySnake.heading
+  enemySnake.nextWanderAt = Date.now() + 500
 }
 
 function eatBadSnakeWhole(enemySnake) {
@@ -2661,22 +3405,100 @@ function addPlayerSegments(count) {
 }
 
 function drawBadSnake(enemySnake) {
-  drawBadCentipedeSegment(enemySnake.head.x, enemySnake.head.y, enemySnake.heading, true, enemySnake.palette, 0, enemySnake.isBurning)
+  drawBadCentipedeSegment(enemySnake.head.x, enemySnake.head.y, enemySnake.heading, true, enemySnake.palette, 0, enemySnake.isBurning, enemySnake.crushProgress)
 
   for (var i = 0; i < enemySnake.segments.length; i++) {
     var segment = enemySnake.segments[i]
     var leader = i === 0 ? enemySnake.head : enemySnake.segments[i - 1]
     var angle = Math.atan2(leader.y - segment.y, leader.x - segment.x)
-    drawBadCentipedeSegment(segment.x, segment.y, angle, false, enemySnake.palette, i + 1, enemySnake.isBurning)
+    drawBadCentipedeSegment(segment.x, segment.y, angle, false, enemySnake.palette, i + 1, enemySnake.isBurning, enemySnake.crushProgress)
+  }
+
+  if (enemySnake.crushProgress > 0 && !enemySnake.isBurning) {
+    drawBadSnakeCrushTransformation(enemySnake)
+  }
+
+  if (enemySnake.isTrapped && !enemySnake.isBurning) {
+    drawTrappedCentipedeIndicator(enemySnake)
   }
 }
 
-function drawBadCentipedeSegment(posX, posY, angle, isHead, palette, segmentIndex, isBurning) {
+function drawBadSnakeCrushTransformation(enemySnake) {
+  var points = [enemySnake.head].concat(enemySnake.segments)
+  var progress = enemySnake.crushProgress || 0
+
+  for (var i = 0; i < points.length; i++) {
+    var stagger = points.length > 1 ? i / (points.length - 1) * 0.35 : 0
+    var orbProgress = Math.max(0, Math.min(1, (progress - stagger) / 0.65))
+    if (orbProgress <= 0) continue
+
+    var point = points[i]
+    var pulse = 1 + Math.sin(Date.now() * 0.018 + i) * 0.08 * orbProgress
+    var radius = (i === 0 ? 10 : 8) * renderScale * pulse
+
+    ctx.save()
+    ctx.globalAlpha = orbProgress
+    ctx.fillStyle = 'rgba(255, 116, 25, 0.24)'
+    ctx.beginPath()
+    ctx.arc(point.x, point.y, radius * 1.65, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ff8128'
+    ctx.beginPath()
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ffd071'
+    ctx.beginPath()
+    ctx.arc(
+      point.x - radius * 0.25,
+      point.y - radius * 0.25,
+      radius * 0.32,
+      0,
+      Math.PI * 2
+    )
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+function drawTrappedCentipedeIndicator(enemySnake) {
+  var pulse = 0.82 + Math.sin(Date.now() * 0.012) * 0.18
+  var crushProgress = enemySnake.crushProgress || 0
+
+  ctx.save()
+  ctx.translate(enemySnake.head.x, enemySnake.head.y)
+  ctx.strokeStyle = 'rgba(115, 226, 255, ' + pulse + ')'
+  ctx.lineWidth = 2 * renderScale
+  ctx.setLineDash([4 * renderScale, 3 * renderScale])
+  ctx.beginPath()
+  ctx.arc(0, 0, 18 * renderScale, 0, Math.PI * 2)
+  ctx.stroke()
+  if (crushProgress > 0) {
+    ctx.setLineDash([])
+    ctx.strokeStyle = '#ff9a3d'
+    ctx.lineWidth = 3 * renderScale
+    ctx.beginPath()
+    ctx.arc(0, 0, 21 * renderScale, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * crushProgress)
+    ctx.stroke()
+  }
+  ctx.setLineDash([])
+  var statusText = crushProgress > 0 ? 'CRUSHING' : 'TRAPPED'
+  ctx.fillStyle = crushProgress > 0 ? '#ffd29a' : '#dff8ff'
+  ctx.strokeStyle = 'rgba(5, 18, 25, 0.92)'
+  ctx.lineWidth = 2.5 * renderScale
+  ctx.font = '800 ' + 8 * renderScale + 'px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.strokeText(statusText, 0, -20 * renderScale)
+  ctx.fillText(statusText, 0, -20 * renderScale)
+  ctx.restore()
+}
+
+function drawBadCentipedeSegment(posX, posY, angle, isHead, palette, segmentIndex, isBurning, crushProgress) {
   var now = Date.now()
   var walkPhase = isBurning ? 0 : Math.sin(now * 0.016 + segmentIndex * 0.85)
   var flameStep = Math.sin(now * 0.032 + segmentIndex * 0.7) * 2
   var legReach = isHead ? 10 : 12
-  var legLift = walkPhase * 3
+  var legLift = walkPhase * 3 * (1 - (crushProgress || 0))
 
   ctx.save()
   ctx.translate(posX, posY)
@@ -2825,10 +3647,11 @@ function applyEntityBounces() {
 }
 
 function canEntityBounce(entity) {
-  return !entity.isBurning && !entity.enteringArena && !entity.leavingArena
+  return entity.type !== 'centipede-orb' && !entity.isBurning && !entity.enteringArena && !entity.leavingArena
 }
 
 function getEntityBounceRadius(entity) {
+  if (entity.type === 'centipede-orb') return 7 * renderScale
   if (entity.type === 'grub') return 14 * renderScale
   if (entity.type === 'mouse') return 16 * renderScale
   if (entity.isBad) return 14 * renderScale
@@ -2924,7 +3747,9 @@ function applyFoodCentipedeBounce(food, enemySnake) {
 
   food.x += normalX * overlap * 0.75
   food.y += normalY * overlap * 0.75
-  moveBadSnake(enemySnake, -normalX * overlap * 0.25, -normalY * overlap * 0.25)
+  if (!enemySnake.isTrapped) {
+    moveBadSnake(enemySnake, -normalX * overlap * 0.25, -normalY * overlap * 0.25)
+  }
 
   var velocityIntoCentipede = food.dx * -normalX + food.dy * -normalY
   if (velocityIntoCentipede > 0) {
@@ -2983,8 +3808,11 @@ function applyBadSnakeBounce(firstSnake, secondSnake) {
   var normalY = closestHit.dy / distance
   var overlap = minDistance - distance
 
-  moveBadSnake(firstSnake, -normalX * overlap * 0.5, -normalY * overlap * 0.5)
-  moveBadSnake(secondSnake, normalX * overlap * 0.5, normalY * overlap * 0.5)
+  var firstPushShare = firstSnake.isTrapped ? 0 : secondSnake.isTrapped ? 1 : 0.5
+  var secondPushShare = secondSnake.isTrapped ? 0 : firstSnake.isTrapped ? 1 : 0.5
+
+  moveBadSnake(firstSnake, -normalX * overlap * firstPushShare, -normalY * overlap * firstPushShare)
+  moveBadSnake(secondSnake, normalX * overlap * secondPushShare, normalY * overlap * secondPushShare)
   firstSnake.heading = turnTowardAngle(firstSnake.heading, Math.atan2(-normalY, -normalX), badSnakeTurnRate * 3)
   secondSnake.heading = turnTowardAngle(secondSnake.heading, Math.atan2(normalY, normalX), badSnakeTurnRate * 3)
 }
@@ -3009,25 +3837,18 @@ function moveBadSnake(enemySnake, offsetX, offsetY) {
   }
 }
 
-function drawSnake(posX, posY) {
-  dragSegment(0, posX, posY)
-
-  for (var i = 0; i < x.length - 1; i++) {
-    dragSegment(i + 1, x[i], y[i], i < x.length - 2)
-  }
-
+function drawSnake() {
   drawSnakeTail()
+
+  for (var i = x.length - 2; i >= 0; i--) {
+    drawSnakeSegment(i)
+  }
 }
 
-function dragSegment(i, xin, yin, shouldDraw) {
-  var dx = xin - x[i]
-  var dy = yin - y[i]
-  var angle = Math.atan2(dy, dx)
-
-  x[i] = xin - Math.cos(angle) * segLength
-  y[i] = yin - Math.sin(angle) * segLength
-
-  if (shouldDraw === false) return
+function drawSnakeSegment(i) {
+  var leaderX = i === 0 ? snakeHead.x : x[i - 1]
+  var leaderY = i === 0 ? snakeHead.y : y[i - 1]
+  var angle = Math.atan2(leaderY - y[i], leaderX - x[i])
 
   ctx.save()
   ctx.translate(x[i], y[i])
@@ -3068,9 +3889,6 @@ function dragSegment(i, xin, yin, shouldDraw) {
   if (i === 0) {
     drawSnakeFace(28 * renderScale, 46 * renderScale)
   }
-
-  ctx.rotate(-Math.PI / 2)
-  drawLine(0, 0, segLength, 0, segColor, 10)
 
   ctx.restore()
 }
@@ -3187,6 +4005,128 @@ function changes(length) {
   y[length - 1] = y[length - 2]
 }
 
+function recordSnakeHeadTrail() {
+  if (snakeTrail.length === 0) {
+    resetSnakeBody()
+    return
+  }
+
+  var lastPoint = snakeTrail[snakeTrail.length - 1]
+  var deltaX = snakeHead.x - lastPoint.x
+  var deltaY = snakeHead.y - lastPoint.y
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+  if (distance < 0.001) return
+
+  var maxPointSpacing = Math.max(1.5, 2.5 * renderScale)
+  var steps = Math.max(1, Math.ceil(distance / maxPointSpacing))
+
+  for (var step = 1; step <= steps; step++) {
+    var progress = step / steps
+    snakeTrail.push({
+      x: lastPoint.x + deltaX * progress,
+      y: lastPoint.y + deltaY * progress,
+    })
+  }
+
+  trimSnakeTrail()
+}
+
+function trimSnakeTrail() {
+  var requiredLength = (n + 3) * segLength + 30 * renderScale
+  var accumulatedLength = 0
+  var keepFromIndex = 0
+
+  for (var i = snakeTrail.length - 2; i >= 0; i--) {
+    var newerPoint = snakeTrail[i + 1]
+    var olderPoint = snakeTrail[i]
+    accumulatedLength += Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+    if (accumulatedLength >= requiredLength) {
+      keepFromIndex = i
+      break
+    }
+  }
+
+  if (keepFromIndex > 0) {
+    snakeTrail.splice(0, keepFromIndex)
+  }
+}
+
+function updateSnakeBodyFromTrail(skipCornerCut) {
+  if (snakeTrail.length === 0) return
+
+  var previousX = x.slice()
+  var previousY = y.slice()
+  x.length = n
+  y.length = n
+
+  var newestPointIndex = snakeTrail.length - 1
+  var newerPoint = snakeTrail[newestPointIndex]
+  var olderPointIndex = newestPointIndex - 1
+  var accumulatedLength = 0
+
+  for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
+    var targetDistance = (segmentIndex + 1) * segLength
+    var positionFound = false
+
+    while (olderPointIndex >= 0) {
+      var olderPoint = snakeTrail[olderPointIndex]
+      var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+      if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
+        var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
+        x[segmentIndex] = newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress
+        y[segmentIndex] = newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress
+        positionFound = true
+        break
+      }
+
+      accumulatedLength += edgeLength
+      newerPoint = olderPoint
+      olderPointIndex--
+    }
+
+    if (!positionFound) {
+      var oldestPoint = snakeTrail[0]
+      x[segmentIndex] = oldestPoint.x
+      y[segmentIndex] = oldestPoint.y
+    }
+  }
+
+  if (!skipCornerCut) applySnakeCornerCut(previousX, previousY)
+}
+
+function applySnakeCornerCut(previousX, previousY) {
+  var leadX = snakeHead.x
+  var leadY = snakeHead.y
+
+  for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
+    var oldX = previousX[segmentIndex]
+    var oldY = previousY[segmentIndex]
+
+    if (!Number.isFinite(oldX) || !Number.isFinite(oldY)) {
+      leadX = x[segmentIndex]
+      leadY = y[segmentIndex]
+      continue
+    }
+
+    var dx = leadX - oldX
+    var dy = leadY - oldY
+    var distance = Math.sqrt(dx * dx + dy * dy)
+
+    if (distance > 0.001) {
+      var shortcutX = leadX - dx / distance * segLength
+      var shortcutY = leadY - dy / distance * segLength
+      x[segmentIndex] += (shortcutX - x[segmentIndex]) * snakeCornerCutStrength
+      y[segmentIndex] += (shortcutY - y[segmentIndex]) * snakeCornerCutStrength
+    }
+
+    leadX = x[segmentIndex]
+    leadY = y[segmentIndex]
+  }
+}
+
 function addSnakeSegments(count) {
   for (var i = 0; i < count; i++) {
     changes(n - count + i + 1)
@@ -3198,13 +4138,24 @@ function addSnakeSegments(count) {
 
   boostEnergy = Math.min(nextMaxEnergy, boostEnergy + addedCapacity)
   boostCoolingDown = !boosting && boostEnergy < nextMaxEnergy
+  updateSnakeBodyFromTrail()
 }
 
 function resetSnakeBody() {
-  for (var i = 0; i < x.length; i++) {
-    x[i] = snakeHead.x - Math.cos(headingAngle) * segLength * (i + 1)
-    y[i] = snakeHead.y - Math.sin(headingAngle) * segLength * (i + 1)
+  snakeTrail = []
+
+  var trailLength = (n + 3) * segLength
+  var pointSpacing = Math.max(1.5, 2.5 * renderScale)
+
+  for (var distance = trailLength; distance > 0; distance -= pointSpacing) {
+    snakeTrail.push({
+      x: snakeHead.x - Math.cos(headingAngle) * distance,
+      y: snakeHead.y - Math.sin(headingAngle) * distance,
+    })
   }
+
+  snakeTrail.push({ x: snakeHead.x, y: snakeHead.y })
+  updateSnakeBodyFromTrail(true)
 }
 
 function foodRandom() {
@@ -3215,8 +4166,16 @@ function foodRandom() {
 
     if (foods[i].isBurning) {
       if (Date.now() >= foods[i].burnUntil) {
-        foods.splice(i, 1)
-        i--
+        var burnedFood = foods[i]
+
+        if (burnedFood.isBad) {
+          spawnOrangePoof([{ x: burnedFood.x, y: burnedFood.y }])
+          foods[i] = createOrangeRewardOrb(burnedFood, 1)
+        } else {
+          foods.splice(i, 1)
+          i--
+        }
+
         continue
       } else {
         foods[i].dx = 0
@@ -3240,12 +4199,19 @@ function foodRandom() {
       foods[i].enteringArena = true
     }
 
+    if (foods[i].type === 'centipede-orb') {
+      foods[i].dx = 0
+      foods[i].dy = 0
+      continue
+    }
+
     if (foods[i].type === 'mouse' && !foods[i].enteringArena && !foods[i].leavingArena) {
       updateMouseMovement(foods[i])
     }
 
-    foods[i].x += foods[i].dx
-    foods[i].y += foods[i].dy
+    var crushSpeedScale = 1 - (foods[i].crushProgress || 0) * 0.86
+    foods[i].x += foods[i].dx * crushSpeedScale
+    foods[i].y += foods[i].dy * crushSpeedScale
 
     var foodEdgeSize = 13 * renderScale
 
@@ -3265,6 +4231,9 @@ function foodRandom() {
 
       if (isEntityInsideArena(foods[i], foodEdgeSize)) {
         foods[i].enteringArena = false
+        if (foods[i].isBad) {
+          foods[i].spawnProtectionUntil = Date.now() + poisonBeetleSpawnProtectionDuration
+        }
       } else {
         continue
       }
@@ -3522,7 +4491,8 @@ function getRenderScale() {
 
 function getMotionScale() {
   var shortestSide = Math.min(canvas.width, canvas.height)
-  return Math.max(0.56, Math.min(1, shortestSide / 700))
+  var responsiveMotionScale = Math.max(0.56, Math.min(1, shortestSide / 700))
+  return responsiveMotionScale * arenaMovementSpeedMultiplier
 }
 
 function getArenaCornerRadius() {
