@@ -67,12 +67,7 @@
           </ul>
         </div>
         <div class="hero-art" role="img" aria-label="Slither N' Slash snake racing through a rocky arena">
-          <div class="hero-snake">
-            <img class="hero-snake-head" src="./assets/snake_head.png" alt="" />
-            <img class="hero-snake-body body-one" src="./assets/snake_body.png" alt="" />
-            <img class="hero-snake-body body-two" src="./assets/snake_body.png" alt="" />
-            <img class="hero-snake-body body-three" src="./assets/snake_body.png" alt="" />
-          </div>
+          <canvas id="hero-snake-canvas" class="hero-snake-canvas" aria-hidden="true"></canvas>
           <span class="food-orb orb-one"></span>
           <span class="food-orb orb-two"></span>
           <span class="food-orb orb-three"></span>
@@ -130,8 +125,12 @@
         </div>
 
         <div id="game-container" class="game-shell">
-          <button id="fullscreen-exit-button" class="fullscreen-exit-button" type="button">Exit Fullscreen</button>
+          <div class="game-mode-toolbar" aria-label="Play mode controls">
+            <button id="game-mode-pause-button" class="game-mode-control-button" type="button">Pause</button>
+            <button id="fullscreen-exit-button" class="fullscreen-exit-button" type="button">Exit</button>
+          </div>
           <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost control">
+            <div class="control-position-handle" aria-hidden="true">&#8597;</div>
             <div class="control-box-label">Boost</div>
             <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
           </div>
@@ -142,6 +141,7 @@
           </section>
 
           <div class="mobile-control-box joystick-control-box" data-mobile-control="joystick" aria-label="Joystick control">
+            <div class="control-position-handle" aria-hidden="true">&#8597;</div>
             <div class="joystick-origin" id="joystick-origin"></div>
             <div class="joystick-handle" id="joystick-handle"></div>
             <div class="control-box-label">Move</div>

@@ -112,9 +112,11 @@ var lastBoostVisualProgress = -1
 var lastBoostVisualState = ''
 var boostVisualUpdateInterval = 50
 var mobileControlMediaQuery
+var adjustableControlDrag
 
 wormHeadImage.src = './assets/snake_head.png'
 wormBodyImage.src = './assets/snake_body.png'
+setupHeroSnakePreview()
 
 canvas = document.getElementById('myCanvas')
 var gameStage = document.querySelector('.game-stage')
@@ -122,16 +124,69 @@ resizeCanvas()
 
 window.addEventListener('resize', function () {
   resizeCanvas()
+  drawHeroSnakePreview()
 })
 
 var playSnakeGameBtn = document.getElementById('game-toggle')
 var snakeGamePanel = document.querySelector('.snake-game-panel')
 var settingsPauseButton = document.getElementById('settings-pause-button')
+var gameModePauseButton = document.getElementById('game-mode-pause-button')
 
-playSnakeGameBtn.addEventListener('click', toggleGamePlayback)
+playSnakeGameBtn.addEventListener('click', handlePrimaryGameToggle)
 settingsPauseButton.addEventListener('click', toggleGamePlayback)
+gameModePauseButton.addEventListener('click', toggleGamePlayback)
 
 setupSiteControls()
+
+function handlePrimaryGameToggle() {
+  if (!document.body.classList.contains('is-game-mode')) {
+    enterGameMode(false)
+  }
+
+  toggleGamePlayback()
+}
+
+function enterGameMode(shouldStart) {
+  var gameContainer = document.getElementById('game-container')
+
+  document.documentElement.classList.add('is-game-mode')
+  document.body.classList.add('is-game-mode')
+  gameContainer.classList.add('is-play-mode')
+  gameModePauseButton.innerText = playing ? 'Pause' : (controlsReady ? 'Resume' : 'Start')
+  updateActiveSectionNavigation('play')
+
+  window.requestAnimationFrame(function () {
+    refreshMobileControlPositions()
+    resizeCanvas()
+    window.requestAnimationFrame(resizeCanvas)
+  })
+
+  if (shouldStart && !playing) {
+    toggleGamePlayback()
+  }
+}
+
+function exitGameMode() {
+  var gameContainer = document.getElementById('game-container')
+
+  if (playing) {
+    toggleGamePlayback()
+  }
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(function () {})
+  }
+
+  document.documentElement.classList.remove('is-game-mode')
+  document.body.classList.remove('is-game-mode')
+  gameContainer.classList.remove('is-play-mode')
+
+  window.requestAnimationFrame(function () {
+    var playSection = document.getElementById('play')
+    var headerOffset = 90
+    window.scrollTo(0, Math.max(0, playSection.offsetTop - headerOffset))
+  })
+}
 
 function toggleGamePlayback() {
   if (!playing) {
@@ -139,6 +194,7 @@ function toggleGamePlayback() {
     playing = true
     playSnakeGameBtn.innerText = 'Pause'
     settingsPauseButton.innerText = 'Pause Game'
+    gameModePauseButton.innerText = 'Pause'
     document.body.classList.add('is-playing')
     snakeGamePanel.insertBefore(playSnakeGameBtn, snakeGamePanel.children[1])
     init()
@@ -146,6 +202,7 @@ function toggleGamePlayback() {
     playing = false
     playSnakeGameBtn.innerText = 'Resume Game'
     settingsPauseButton.innerText = 'Resume Game'
+    gameModePauseButton.innerText = 'Resume'
     document.body.classList.remove('is-playing')
     cancelAnimationFrame(animationRequestId)
     stopFoodTimer()
@@ -167,6 +224,8 @@ function setupSiteControls() {
   var copyrightYear = document.getElementById('copyright-year')
 
   copyrightYear.textContent = new Date().getFullYear()
+  setupSectionNavigation()
+  setupAdjustableMobileControls()
 
   navToggle.addEventListener('click', function () {
     var isOpen = siteNavigation.classList.toggle('is-open')
@@ -177,6 +236,16 @@ function setupSiteControls() {
     if (!event.target.closest('a')) return
     siteNavigation.classList.remove('is-open')
     navToggle.setAttribute('aria-expanded', 'false')
+  })
+
+  document.addEventListener('click', function (event) {
+    var playLink = event.target.closest('a[href="#play"]')
+    if (!playLink) return
+
+    event.preventDefault()
+    siteNavigation.classList.remove('is-open')
+    navToggle.setAttribute('aria-expanded', 'false')
+    enterGameMode(true)
   })
 
   settingsButton.addEventListener('click', function () {
@@ -203,17 +272,371 @@ function setupSiteControls() {
       return
     }
 
+    enterGameMode(false)
     gameContainer.requestFullscreen().catch(function () {})
   })
 
   fullscreenExitButton.addEventListener('click', function () {
-    document.exitFullscreen().catch(function () {})
+    exitGameMode()
   })
 
   document.addEventListener('fullscreenchange', function () {
     fullscreenButton.innerText = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen'
     window.setTimeout(resizeCanvas, 60)
   })
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !document.body.classList.contains('is-game-mode')) return
+    if (document.fullscreenElement) return
+
+    exitGameMode()
+  })
+}
+
+function setupSectionNavigation() {
+  var updateScheduled = false
+
+  function scheduleNavigationUpdate() {
+    if (updateScheduled || document.body.classList.contains('is-game-mode')) return
+
+    updateScheduled = true
+    window.requestAnimationFrame(function () {
+      updateScheduled = false
+      updateActiveSectionNavigation()
+    })
+  }
+
+  window.addEventListener('scroll', scheduleNavigationUpdate, { passive: true })
+  window.addEventListener('resize', scheduleNavigationUpdate)
+  updateActiveSectionNavigation()
+}
+
+function updateActiveSectionNavigation(forcedSectionId) {
+  var navigationLinks = Array.from(document.querySelectorAll(
+    '.site-nav a[href^="#"], .site-footer nav a[href^="#"]'
+  ))
+  var sectionIds = []
+
+  for (var i = 0; i < navigationLinks.length; i++) {
+    var sectionId = navigationLinks[i].getAttribute('href').slice(1)
+    if (sectionId && sectionIds.indexOf(sectionId) === -1 && document.getElementById(sectionId)) {
+      sectionIds.push(sectionId)
+    }
+  }
+
+  sectionIds.sort(function (firstId, secondId) {
+    return document.getElementById(firstId).offsetTop - document.getElementById(secondId).offsetTop
+  })
+
+  var activeSectionId = forcedSectionId || sectionIds[0]
+
+  if (!forcedSectionId) {
+    var readingLine = window.scrollY + Math.min(window.innerHeight * 0.38, 300)
+
+    for (var sectionIndex = 0; sectionIndex < sectionIds.length; sectionIndex++) {
+      if (document.getElementById(sectionIds[sectionIndex]).offsetTop <= readingLine) {
+        activeSectionId = sectionIds[sectionIndex]
+      }
+    }
+
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      activeSectionId = sectionIds[sectionIds.length - 1]
+    }
+  }
+
+  for (var linkIndex = 0; linkIndex < navigationLinks.length; linkIndex++) {
+    var isCurrent = navigationLinks[linkIndex].getAttribute('href') === '#' + activeSectionId
+    navigationLinks[linkIndex].classList.toggle('is-current', isCurrent)
+
+    if (isCurrent) {
+      navigationLinks[linkIndex].setAttribute('aria-current', 'location')
+    } else {
+      navigationLinks[linkIndex].removeAttribute('aria-current')
+    }
+  }
+}
+
+function setupAdjustableMobileControls() {
+  var controlBoxes = document.querySelectorAll('[data-mobile-control]')
+
+  for (var i = 0; i < controlBoxes.length; i++) {
+    restoreMobileControlPosition(controlBoxes[i])
+    controlBoxes[i].addEventListener('pointerdown', beginMobileControlAdjustment, true)
+  }
+
+  document.addEventListener('pointermove', moveMobileControlAdjustment, true)
+  document.addEventListener('pointerup', endMobileControlAdjustment, true)
+  document.addEventListener('pointercancel', endMobileControlAdjustment, true)
+
+  window.addEventListener('resize', function () {
+    for (var boxIndex = 0; boxIndex < controlBoxes.length; boxIndex++) {
+      applyMobileControlOffset(
+        controlBoxes[boxIndex],
+        getStoredMobileControlOffset(controlBoxes[boxIndex])
+      )
+    }
+  })
+}
+
+function beginMobileControlAdjustment(event) {
+  if (playing || !isAdjustableMobileControlLayout()) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var controlBox = event.currentTarget
+  var controlType = controlBox.dataset.mobileControl
+  var startingOffset = getCurrentMobileControlOffset(controlBox)
+
+  adjustableControlDrag = {
+    box: controlBox,
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startOffset: startingOffset,
+    controlType: controlType,
+  }
+
+  controlBox.classList.add('is-repositioning')
+  capturePointer(controlBox, event.pointerId)
+}
+
+function moveMobileControlAdjustment(event) {
+  if (!adjustableControlDrag || event.pointerId !== adjustableControlDrag.pointerId) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var nextOffset = adjustableControlDrag.startOffset + event.clientY - adjustableControlDrag.startY
+  applyMobileControlOffset(adjustableControlDrag.box, nextOffset)
+}
+
+function endMobileControlAdjustment(event) {
+  if (!adjustableControlDrag || event.pointerId !== adjustableControlDrag.pointerId) return
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  var controlBox = adjustableControlDrag.box
+  var finalOffset = getCurrentMobileControlOffset(controlBox)
+  controlBox.classList.remove('is-repositioning')
+
+  try {
+    localStorage.setItem(getMobileControlStorageKey(controlBox), String(Math.round(finalOffset)))
+  } catch {}
+
+  adjustableControlDrag = undefined
+}
+
+function applyMobileControlOffset(controlBox, requestedOffset) {
+  if (!isAdjustableMobileControlLayout()) {
+    controlBox.style.setProperty('--control-y-offset', requestedOffset + 'px')
+    controlBox.dataset.controlYOffset = String(requestedOffset)
+    return
+  }
+
+  var currentOffset = getCurrentMobileControlOffset(controlBox)
+  var rect = controlBox.getBoundingClientRect()
+  var baseTop = rect.top - currentOffset
+  var baseBottom = rect.bottom - currentOffset
+  var safeTop = getMobileControlSafeTop(controlBox)
+  var safeBottom = 6
+  var minimumOffset = safeTop - baseTop
+  var maximumOffset = window.innerHeight - safeBottom - baseBottom
+  var nextOffset = Math.max(minimumOffset, Math.min(maximumOffset, requestedOffset || 0))
+
+  controlBox.style.setProperty('--control-y-offset', nextOffset + 'px')
+  controlBox.dataset.controlYOffset = String(nextOffset)
+}
+
+function getMobileControlSafeTop(controlBox) {
+  var safeTop = 54
+
+  if (controlBox.dataset.mobileControl === 'boost') {
+    var toolbar = document.querySelector('.game-mode-toolbar')
+    var toolbarRect = toolbar ? toolbar.getBoundingClientRect() : undefined
+    if (toolbarRect && toolbarRect.height) {
+      safeTop = Math.max(safeTop, toolbarRect.bottom + 44)
+    }
+
+  } else {
+    var highScoreField = document.querySelector('.high-score-feild')
+    var highScoreRect = highScoreField ? highScoreField.getBoundingClientRect() : undefined
+    if (highScoreRect && highScoreRect.height) safeTop = Math.max(safeTop, highScoreRect.bottom + 6)
+  }
+
+  return safeTop
+}
+
+function refreshMobileControlPositions() {
+  var controlBoxes = document.querySelectorAll('[data-mobile-control]')
+
+  for (var i = 0; i < controlBoxes.length; i++) {
+    applyMobileControlOffset(controlBoxes[i], getStoredMobileControlOffset(controlBoxes[i]))
+  }
+}
+
+function restoreMobileControlPosition(controlBox) {
+  applyMobileControlOffset(controlBox, getStoredMobileControlOffset(controlBox))
+}
+
+function getStoredMobileControlOffset(controlBox) {
+  try {
+    var storedOffset = localStorage.getItem(getMobileControlStorageKey(controlBox))
+    return storedOffset ? parseFloat(storedOffset) || 0 : 0
+  } catch {
+    return 0
+  }
+}
+
+function getCurrentMobileControlOffset(controlBox) {
+  return parseFloat(controlBox.dataset.controlYOffset) || 0
+}
+
+function getMobileControlStorageKey(controlBox) {
+  return 'mobile-control-' + controlBox.dataset.mobileControl + '-y'
+}
+
+function isAdjustableMobileControlLayout() {
+  return document.body.classList.contains('is-game-mode') &&
+    window.matchMedia('(max-width: 1024px) and (max-height: 540px) and (orientation: landscape)').matches
+}
+
+function setupHeroSnakePreview() {
+  wormHeadImage.addEventListener('load', drawHeroSnakePreview)
+  wormBodyImage.addEventListener('load', drawHeroSnakePreview)
+  drawHeroSnakePreview()
+}
+
+function drawHeroSnakePreview() {
+  var heroCanvas = document.getElementById('hero-snake-canvas')
+  if (!heroCanvas || !wormHeadImage.complete || !wormBodyImage.complete) return
+  if (!wormHeadImage.naturalWidth || !wormBodyImage.naturalWidth) return
+
+  var rect = heroCanvas.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+
+  var pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
+  heroCanvas.width = Math.round(rect.width * pixelRatio)
+  heroCanvas.height = Math.round(rect.height * pixelRatio)
+
+  var heroContext = heroCanvas.getContext('2d')
+  heroContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+  heroContext.clearRect(0, 0, rect.width, rect.height)
+  heroContext.imageSmoothingEnabled = true
+  heroContext.imageSmoothingQuality = 'high'
+
+  var points = getHeroSnakePreviewPoints(rect.width, rect.height, 8)
+  var previewScale = Math.min(rect.width, rect.height) / 215
+
+  drawHeroSnakePreviewTail(heroContext, points[0], points[1], previewScale)
+
+  for (var i = 1; i < points.length - 1; i++) {
+    var nextPoint = points[i + 1]
+    var previousPoint = points[Math.max(0, i - 1)]
+    var bodyAngle = Math.atan2(nextPoint.y - previousPoint.y, nextPoint.x - previousPoint.x)
+    drawHeroSnakePreviewSegment(heroContext, wormBodyImage, points[i], bodyAngle, 24, 34, previewScale)
+  }
+
+  var headPoint = points[points.length - 1]
+  var beforeHead = points[points.length - 2]
+  var headAngle = Math.atan2(headPoint.y - beforeHead.y, headPoint.x - beforeHead.x)
+  drawHeroSnakePreviewSegment(heroContext, wormHeadImage, headPoint, headAngle, 28, 46, previewScale, true)
+}
+
+function getHeroSnakePreviewPoints(width, height, pointCount) {
+  var curvePoints = []
+  var cumulativeLengths = [0]
+  var sampleCount = 120
+  var totalLength = 0
+
+  for (var i = 0; i <= sampleCount; i++) {
+    var progress = i / sampleCount
+    var curvePoint = getHeroSnakePreviewCurvePoint(width, height, progress)
+    curvePoints.push(curvePoint)
+
+    if (i > 0) {
+      var previousCurvePoint = curvePoints[i - 1]
+      totalLength += Math.hypot(curvePoint.x - previousCurvePoint.x, curvePoint.y - previousCurvePoint.y)
+      cumulativeLengths.push(totalLength)
+    }
+  }
+
+  var points = []
+
+  for (var pointIndex = 0; pointIndex < pointCount; pointIndex++) {
+    var targetLength = totalLength * pointIndex / (pointCount - 1)
+    var sampleIndex = 1
+
+    while (sampleIndex < cumulativeLengths.length && cumulativeLengths[sampleIndex] < targetLength) {
+      sampleIndex++
+    }
+
+    var previousLength = cumulativeLengths[Math.max(0, sampleIndex - 1)]
+    var nextLength = cumulativeLengths[Math.min(sampleIndex, cumulativeLengths.length - 1)]
+    var lengthRange = Math.max(0.0001, nextLength - previousLength)
+    var blend = (targetLength - previousLength) / lengthRange
+    var previousPoint = curvePoints[Math.max(0, sampleIndex - 1)]
+    var nextPoint = curvePoints[Math.min(sampleIndex, curvePoints.length - 1)]
+
+    points.push({
+      x: previousPoint.x + (nextPoint.x - previousPoint.x) * blend,
+      y: previousPoint.y + (nextPoint.y - previousPoint.y) * blend,
+    })
+  }
+
+  return points
+}
+
+function getHeroSnakePreviewCurvePoint(width, height, progress) {
+  return {
+    x: width * (0.31 + 0.36 * progress + 0.055 * Math.sin(progress * Math.PI * 2)),
+    y: height * (0.69 - 0.38 * progress),
+  }
+}
+
+function drawHeroSnakePreviewSegment(heroContext, image, point, angle, width, height, scale, drawFace) {
+  heroContext.save()
+  heroContext.translate(point.x, point.y)
+  heroContext.rotate(angle + Math.PI / 2)
+  heroContext.drawImage(image, -width * scale / 2, -height * scale / 2, width * scale, height * scale)
+
+  if (drawFace) {
+    drawSnakeFaceOnContext(heroContext, width * scale, height * scale, scale, true)
+  }
+
+  heroContext.restore()
+}
+
+function drawHeroSnakePreviewTail(heroContext, tailPoint, nextPoint, scale) {
+  var tailAngle = Math.atan2(tailPoint.y - nextPoint.y, tailPoint.x - nextPoint.x)
+  var tailX = tailPoint.x + Math.cos(tailAngle) * 5 * scale
+  var tailY = tailPoint.y + Math.sin(tailAngle) * 5 * scale
+
+  heroContext.save()
+  heroContext.translate(tailX, tailY)
+  heroContext.rotate(tailAngle)
+  heroContext.scale(scale, scale)
+  heroContext.beginPath()
+  heroContext.moveTo(-12, -11)
+  heroContext.quadraticCurveTo(3, -8, 16, 0)
+  heroContext.quadraticCurveTo(3, 8, -12, 11)
+  heroContext.quadraticCurveTo(-7, 4, -7, -4)
+  heroContext.closePath()
+  heroContext.save()
+  heroContext.clip()
+  heroContext.rotate(Math.PI / 2)
+  heroContext.drawImage(wormBodyImage, -17, -13, 34, 26)
+  heroContext.restore()
+  heroContext.strokeStyle = '#7c5f12'
+  heroContext.lineWidth = 1.2
+  heroContext.stroke()
+  heroContext.strokeStyle = '#14110a'
+  heroContext.lineWidth = 2.2
+  heroContext.beginPath()
+  heroContext.moveTo(-9, 0)
+  heroContext.quadraticCurveTo(2, -1.6, 12, 0)
+  heroContext.stroke()
+  heroContext.restore()
 }
 
 function resizeCanvas() {
@@ -274,6 +697,8 @@ function setupControls() {
   requestAnimationFrame(updateGamepadPauseControl)
 
   window.addEventListener('keydown', function (evt) {
+    if (!shouldCaptureGameKeyboard(evt)) return
+
     if (evt.key === 'Shift' || evt.key === ' ') {
       evt.preventDefault()
       pressedKeys[evt.key] = true
@@ -288,15 +713,20 @@ function setupControls() {
   })
 
   window.addEventListener('keyup', function (evt) {
+    var isGameKey = evt.key === 'Shift' || evt.key === ' ' || isMovementKey(evt.key)
+    if (!isGameKey) return
+
+    pressedKeys[evt.key] = false
+
+    if (!shouldCaptureGameKeyboard(evt)) return
+
     if (evt.key === 'Shift' || evt.key === ' ') {
       evt.preventDefault()
-      pressedKeys[evt.key] = false
     }
 
     if (!isMovementKey(evt.key)) return
 
     evt.preventDefault()
-    pressedKeys[evt.key] = false
   })
 
   canvas.addEventListener('pointermove', function (evt) {
@@ -315,6 +745,21 @@ function setupControls() {
     releaseMobileControls()
     releaseGamepadControls()
   })
+}
+
+function shouldCaptureGameKeyboard(evt) {
+  if (!playing) return false
+
+  var target = evt.target
+  if (target && target.closest && target.closest('input, textarea, select, button, a, [contenteditable="true"]')) {
+    return false
+  }
+
+  var rect = gameStage.getBoundingClientRect()
+  var visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0)
+  var requiredVisibleHeight = Math.min(rect.height * 0.35, window.innerHeight * 0.35)
+
+  return visibleHeight >= requiredVisibleHeight
 }
 
 function updateGamepadControls() {
@@ -398,7 +843,7 @@ function setupTouchJoystick() {
 }
 
 function handleJoystickPointerDown(evt) {
-  if (evt.pointerType === 'mouse' || joystickActive) return
+  if (!playing || evt.pointerType === 'mouse' || joystickActive) return
 
   evt.preventDefault()
   evt.stopPropagation()
@@ -429,7 +874,7 @@ function handleJoystickPointerUp(evt) {
 }
 
 function handleBoostPointerDown(evt) {
-  if (evt.pointerType === 'mouse' || boostTouchActive) return
+  if (!playing || evt.pointerType === 'mouse' || boostTouchActive) return
 
   evt.preventDefault()
   evt.stopPropagation()
@@ -1525,7 +1970,11 @@ function applyKeyboardControls() {
 }
 
 function getBoostDuration() {
-  var extraSegments = Math.max(0, n - startingSegments)
+  return getBoostDurationForSegmentCount(n)
+}
+
+function getBoostDurationForSegmentCount(segmentCount) {
+  var extraSegments = Math.max(0, segmentCount - startingSegments)
   return Math.min(maxBoostDuration, baseBoostDuration + extraSegments * boostDurationPerSegment)
 }
 
@@ -1644,13 +2093,12 @@ function updateBoostControlVisual(progress, state, forceUpdate) {
     lastBoostVisualState = state
 
     var mobileGaugeScale = 0.18 + clampedProgress * 0.82
-    for (var mobileGaugeIndex = 0; mobileGaugeIndex < boostControlGauges.length; mobileGaugeIndex++) {
-      boostControlGauges[mobileGaugeIndex].style.setProperty('--boost-scale', mobileGaugeScale)
-    }
+    var mobileGauge = boostBox ? boostBox.querySelector('.boost-control-gauge') : undefined
+    if (mobileGauge) mobileGauge.style.setProperty('--boost-scale', mobileGaugeScale)
 
-    for (var mobileStateIndex = 0; mobileStateIndex < boostVisualStates.length; mobileStateIndex++) {
-      boostVisualStates[mobileStateIndex].classList.toggle('is-active', state === 'active')
-      boostVisualStates[mobileStateIndex].classList.toggle('is-cooling', state === 'cooldown')
+    if (boostBox) {
+      boostBox.classList.toggle('is-active', state === 'active')
+      boostBox.classList.toggle('is-cooling', state === 'cooldown')
     }
 
     return
@@ -2628,57 +3076,62 @@ function dragSegment(i, xin, yin, shouldDraw) {
 }
 
 function drawSnakeFace(segmentWidth, segmentHeight) {
-  var faceScale = renderScale
+  drawSnakeFaceOnContext(ctx, segmentWidth, segmentHeight, renderScale)
+}
+
+function drawSnakeFaceOnContext(drawingContext, segmentWidth, segmentHeight, faceScale, emphasizeTongue) {
   var eyeY = -segmentHeight * 0.2
   var eyeX = segmentWidth * 0.18
   var tongueCycle = Date.now() % 1800
-  var tongueVisible = tongueCycle < 520
+  var tongueVisible = emphasizeTongue || tongueCycle < 520
 
-  ctx.save()
-  ctx.lineCap = 'round'
+  drawingContext.save()
+  drawingContext.lineCap = 'round'
 
   if (tongueVisible) {
-    var tongueReach = (8 + Math.sin(tongueCycle / 520 * Math.PI) * 7) * faceScale
+    var tongueReach = emphasizeTongue
+      ? 15 * faceScale
+      : (8 + Math.sin(tongueCycle / 520 * Math.PI) * 7) * faceScale
     var tongueStartY = -segmentHeight * 0.48
     var tongueEndY = tongueStartY - tongueReach
 
-    ctx.strokeStyle = '#ff4a63'
-    ctx.lineWidth = 1.7 * faceScale
-    ctx.beginPath()
-    ctx.moveTo(0, tongueStartY)
-    ctx.quadraticCurveTo(1.5 * faceScale, tongueStartY - tongueReach * 0.45, 0, tongueEndY)
-    ctx.stroke()
+    drawingContext.strokeStyle = '#ff4a63'
+    drawingContext.lineWidth = 1.7 * faceScale
+    drawingContext.beginPath()
+    drawingContext.moveTo(0, tongueStartY)
+    drawingContext.quadraticCurveTo(1.5 * faceScale, tongueStartY - tongueReach * 0.45, 0, tongueEndY)
+    drawingContext.stroke()
 
-    ctx.beginPath()
-    ctx.moveTo(0, tongueEndY)
-    ctx.lineTo(-4 * faceScale, tongueEndY - 4 * faceScale)
-    ctx.moveTo(0, tongueEndY)
-    ctx.lineTo(4 * faceScale, tongueEndY - 4 * faceScale)
-    ctx.stroke()
+    drawingContext.beginPath()
+    drawingContext.moveTo(0, tongueEndY)
+    drawingContext.lineTo(-4 * faceScale, tongueEndY - 4 * faceScale)
+    drawingContext.moveTo(0, tongueEndY)
+    drawingContext.lineTo(4 * faceScale, tongueEndY - 4 * faceScale)
+    drawingContext.stroke()
   }
 
-  ctx.fillStyle = '#1a1409'
-  ctx.strokeStyle = '#3a2409'
-  ctx.lineWidth = 0.8 * faceScale
-  ctx.beginPath()
-  ctx.ellipse(-eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, -0.15, 0, Math.PI * 2)
-  ctx.ellipse(eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, 0.15, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.stroke()
+  drawingContext.fillStyle = '#1a1409'
+  drawingContext.strokeStyle = '#3a2409'
+  drawingContext.lineWidth = 0.8 * faceScale
+  drawingContext.beginPath()
+  drawingContext.ellipse(-eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, -0.15, 0, Math.PI * 2)
+  drawingContext.ellipse(eyeX, eyeY, 3.1 * faceScale, 4 * faceScale, 0.15, 0, Math.PI * 2)
+  drawingContext.fill()
+  drawingContext.stroke()
 
-  ctx.fillStyle = '#050403'
-  ctx.beginPath()
-  ctx.arc(-eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
-  ctx.arc(eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
-  ctx.fill()
+  drawingContext.fillStyle = '#050403'
+  drawingContext.beginPath()
+  drawingContext.arc(-eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
+  drawingContext.arc(eyeX, eyeY + 0.2 * faceScale, 2.2 * faceScale, 0, Math.PI * 2)
+  drawingContext.fill()
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
-  ctx.beginPath()
-  ctx.arc(-eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
-  ctx.arc(eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
-  ctx.fill()
+  drawingContext.fillStyle = 'rgba(255, 255, 255, 0.85)'
+  drawingContext.beginPath()
+  drawingContext.arc(-eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
+  drawingContext.arc(eyeX - 0.7 * faceScale, eyeY - 0.9 * faceScale, 0.45 * faceScale, 0, Math.PI * 2)
+  drawingContext.fill()
 
-  ctx.restore()
+  drawingContext.restore()
 }
 
 function drawSnakeTail() {
@@ -2738,6 +3191,13 @@ function addSnakeSegments(count) {
   for (var i = 0; i < count; i++) {
     changes(n - count + i + 1)
   }
+
+  var previousMaxEnergy = getBoostDurationForSegmentCount(n - count)
+  var nextMaxEnergy = getBoostDuration()
+  var addedCapacity = Math.max(0, nextMaxEnergy - previousMaxEnergy)
+
+  boostEnergy = Math.min(nextMaxEnergy, boostEnergy + addedCapacity)
+  boostCoolingDown = !boosting && boostEnergy < nextMaxEnergy
 }
 
 function resetSnakeBody() {
