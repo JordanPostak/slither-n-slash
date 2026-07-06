@@ -76,12 +76,14 @@ body.is-berserker .game-shell {
   position: relative;
   --arena-corner-radius: 24px;
   --arena-rock-size: 420px;
+  --arena-rock-tile-size: var(--arena-rock-size);
   min-width: 0;
   min-height: 360px;
   overflow: hidden;
-  background: url("../assets/dark-rock-background.png") center / var(--arena-rock-size) var(--arena-rock-size) repeat;
+  background: url("../assets/dark-rock-background.png") center / var(--arena-rock-tile-size) var(--arena-rock-tile-size) repeat;
   border: 2px solid rgba(255, 214, 133, 0.42);
   border-radius: var(--arena-corner-radius);
+  transition: background-size 280ms ease-out;
 }
 
 .berserker-status {
@@ -160,6 +162,169 @@ canvas {
   cursor: default;
   touch-action: none;
   border-radius: inherit;
+}
+
+.snake-select-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: clamp(12px, 3vw, 28px);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(66, 111, 51, 0.24), transparent 46%),
+    rgba(5, 8, 7, 0.94);
+  backdrop-filter: blur(4px);
+}
+
+.snake-select-screen[hidden] {
+  display: none;
+}
+
+.snake-select-panel {
+  width: min(820px, 100%);
+  max-height: 100%;
+  padding: clamp(16px, 3vw, 28px);
+  color: #fff7dc;
+  background: linear-gradient(180deg, rgba(33, 39, 29, 0.98), rgba(14, 16, 13, 0.98));
+  border: 2px solid rgba(255, 214, 133, 0.5);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+
+.snake-select-panel h3 {
+  margin: 4px 0 18px;
+  font-size: clamp(1.25rem, 3vw, 2rem);
+}
+
+.snake-skin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.snake-skin-option {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px 8px 10px;
+  color: #e8ddc7;
+  background: rgba(255, 255, 255, 0.055);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  font-size: 0.86rem;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.snake-skin-option:hover,
+.snake-skin-option:focus-visible {
+  border-color: rgba(255, 214, 133, 0.72);
+  background: rgba(255, 214, 133, 0.1);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.snake-skin-option.is-selected {
+  color: #fff7dc;
+  background: linear-gradient(180deg, rgba(80, 124, 59, 0.38), rgba(36, 62, 29, 0.48));
+  border-color: #b9e474;
+  box-shadow: 0 0 0 2px rgba(185, 228, 116, 0.14), 0 0 24px rgba(102, 185, 73, 0.2);
+}
+
+.snake-skin-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 58px;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.55));
+}
+
+.snake-skin-preview img {
+  width: 31px;
+  height: 34px;
+  margin-left: -8px;
+  object-fit: fill;
+}
+
+.snake-skin-preview img:first-child {
+  width: 46px;
+  height: 34px;
+  margin-left: 0;
+}
+
+.snake-skin-preview img:last-child {
+  width: 48px;
+  height: 28px;
+  margin-left: -10px;
+}
+
+.snake-select-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.snake-select-actions button {
+  min-width: 120px;
+  min-height: 44px;
+  padding: 8px 18px;
+}
+
+.snake-select-start {
+  color: #15200e;
+  background: linear-gradient(180deg, #d5f48d, #8fbd4f);
+  border-color: #e8ffad;
+}
+
+.snake-select-start:disabled {
+  cursor: wait;
+  filter: saturate(0.35);
+  opacity: 0.72;
+}
+
+body.is-snake-selecting .play-snake-game-btn {
+  visibility: hidden;
+}
+
+@media (max-width: 700px), (max-height: 540px) {
+  .snake-select-screen {
+    place-items: start center;
+    padding: 8px;
+  }
+
+  .snake-select-panel {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .snake-select-panel h3 {
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+
+  .snake-skin-grid {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 7px;
+  }
+
+  .snake-skin-option {
+    min-height: 86px;
+    padding: 7px 5px;
+  }
+
+  .snake-skin-preview {
+    height: 42px;
+    transform: scale(0.82);
+  }
+
+  .snake-select-actions {
+    margin-top: 10px;
+  }
 }
 
 button {
@@ -936,6 +1101,12 @@ main {
   letter-spacing: 0.04em;
   text-decoration: none;
   text-transform: uppercase;
+}
+
+.boost-capacity {
+  margin-left: 0.3em;
+  color: #ffbd70;
+  font-variant-numeric: tabular-nums;
 }
 
 .brand img {

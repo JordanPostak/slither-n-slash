@@ -1,18 +1,19 @@
 // Player head movement, steering, boost energy, and boost UI state.
 
 function moveSnakeHead() {
-  applyKeyboardControls()
+  var currentTurnRate = getPlayerTurnRate()
+  applyKeyboardControls(currentTurnRate)
 
   if (gamepadSteerAngleTarget !== undefined) {
-    headingAngle = turnTowardAngle(headingAngle, gamepadSteerAngleTarget, turnRate)
+    headingAngle = turnTowardAngle(headingAngle, gamepadSteerAngleTarget, currentTurnRate)
   } else if (steerTarget) {
     var targetAngle = Math.atan2(steerTarget.y - snakeHead.y, steerTarget.x - snakeHead.x)
-    headingAngle = turnTowardAngle(headingAngle, targetAngle, turnRate)
+    headingAngle = turnTowardAngle(headingAngle, targetAngle, currentTurnRate)
   } else if (steerAngleTarget !== undefined) {
-    headingAngle = turnTowardAngle(headingAngle, steerAngleTarget, turnRate)
+    headingAngle = turnTowardAngle(headingAngle, steerAngleTarget, currentTurnRate)
   }
 
-  var currentSpeed = snakeSpeed * motionScale
+  var currentSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
   if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
   if (boosting) currentSpeed *= boostMultiplier
 
@@ -44,18 +45,18 @@ function moveSnakeHead() {
   updateSnakeBodyFromTrail()
 }
 
-function applyKeyboardControls() {
+function applyKeyboardControls(currentTurnRate) {
   var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
   var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
 
   if (turningLeft && !turningRight) {
-    headingAngle -= turnRate
+    headingAngle -= currentTurnRate
     steerTarget = undefined
     steerAngleTarget = undefined
   }
 
   if (turningRight && !turningLeft) {
-    headingAngle += turnRate
+    headingAngle += currentTurnRate
     steerTarget = undefined
     steerAngleTarget = undefined
   }
@@ -139,6 +140,8 @@ function updateBoostMeterStatus(forceUpdate) {
   var boostHeld = isBoostControlActive()
   var boostState = 'ready'
 
+  updateBoostCapacityDisplay(maxEnergy)
+
   if (boosting) {
     boostState = 'active'
     updateBoostMeter(boostMeterFill, boostProgress, boostState, forceUpdate)
@@ -162,6 +165,17 @@ function updateBoostMeterStatus(forceUpdate) {
 
   updateBoostMeter(boostMeterFill, 1, boostState, forceUpdate)
   updateBoostControlVisual(1, boostState, forceUpdate)
+}
+
+function updateBoostCapacityDisplay(maxEnergy) {
+  if (maxEnergy === lastBoostCapacityDisplay) return
+
+  lastBoostCapacityDisplay = maxEnergy
+  var durationLabel = (maxEnergy / 1000).toFixed(1) + 's'
+
+  for (var i = 0; i < boostCapacityElements.length; i++) {
+    boostCapacityElements[i].textContent = durationLabel
+  }
 }
 
 function updateBoostMeter(meterFill, progress, state, forceUpdate) {

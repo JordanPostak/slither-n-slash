@@ -70,7 +70,7 @@ function scheduleNextFireball() {
 function updateGoldenMouse() {
   var now = Date.now()
 
-  if (!goldenMouse && now >= nextGoldenMouseSpawnAt) {
+  if (!goldenMouse && n >= mouseUnlockLength && now >= nextGoldenMouseSpawnAt) {
     goldenMouse = generateGoldenMouse()
   }
 
@@ -90,7 +90,7 @@ function updateGoldenMouse() {
   goldenMouse.y += goldenMouse.dy
   goldenMouse.facingAngle = Math.atan2(goldenMouse.dy, goldenMouse.dx)
 
-  var edgeSize = 16 * renderScale
+  var edgeSize = 16 * renderScale * (goldenMouse.sizeScale || 1)
 
   if (goldenMouse.enteringArena) {
     if (isEntityInsideArena(goldenMouse, edgeSize)) {
@@ -117,7 +117,8 @@ function updateGoldenMouse() {
 }
 
 function generateGoldenMouse() {
-  var spawn = getOffscreenSpawn(getRandomFoodSpeed() * 1.08, 28 * renderScale)
+  var sizeScale = mouseBaseSizeScale
+  var spawn = getOffscreenSpawn(getRandomFoodSpeed() * 1.08, 28 * renderScale * sizeScale)
 
   return {
     x: spawn.x,
@@ -126,6 +127,9 @@ function generateGoldenMouse() {
     dy: spawn.dy,
     facingAngle: Math.atan2(spawn.dy, spawn.dx),
     type: 'golden-mouse',
+    sizeScale: sizeScale,
+    growthValue: mouseGrowthValue,
+    swallowRadius: 24 * renderScale * sizeScale,
     enteringArena: true,
     expiresAt: Date.now() + goldenMouseLifetime,
     fleeEnergy: mouseFleeStamina,

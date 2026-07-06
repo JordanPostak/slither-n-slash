@@ -1,9 +1,66 @@
 // Bootstrap the fully defined game after all deferred subsystem scripts load.
 
-wormHeadImage.src = './assets/snake_head.png'
-wormBodyImage.src = './assets/snake_body.png'
+var snakeSkinConfigs = {
+  1: { folder: 'Snake1', prefix: 'snake1', bodyCount: 5 },
+  2: { folder: 'Snake2', prefix: 'snake2', bodyCount: 4 },
+  3: { folder: 'Snake3', prefix: 'snake3', bodyCount: 5 },
+  4: { folder: 'Snake4', prefix: 'snake4', bodyCount: 6 },
+  5: { folder: 'Snake5', prefix: 'snake5', bodyCount: 5 },
+}
+
+function loadPlayerSnakeSkin(skinNumber) {
+  var resolvedSkinNumber = snakeSkinConfigs[Number(skinNumber)] ? Number(skinNumber) : 1
+  var config = snakeSkinConfigs[resolvedSkinNumber]
+  var basePath = './assets/' + config.folder + '/' + config.prefix
+  var skinImages = []
+
+  selectedSnakeSkin = resolvedSkinNumber
+  wormHeadImage = new Image()
+  wormTailImage = new Image()
+  wormBodyImages = []
+
+  wormHeadImage.src = basePath + '-head.png'
+  wormTailImage.src = basePath + '-tail.png'
+  skinImages.push(wormHeadImage, wormTailImage)
+
+  for (var bodyIndex = 1; bodyIndex <= config.bodyCount; bodyIndex++) {
+    var bodyImage = new Image()
+    bodyImage.src = basePath + '-body' + bodyIndex + '.png'
+    wormBodyImages.push(bodyImage)
+    skinImages.push(bodyImage)
+  }
+
+  try {
+    window.localStorage.setItem('slitherNSlashPlayerSkin', String(selectedSnakeSkin))
+  } catch (error) {}
+
+  setupHeroSnakePreview()
+  return Promise.all(skinImages.map(waitForPlayerSkinImage)).then(function () {
+    drawHeroSnakePreview()
+  })
+}
+
+function waitForPlayerSkinImage(image) {
+  if (image.complete) return Promise.resolve()
+
+  return new Promise(function (resolve) {
+    image.addEventListener('load', resolve, { once: true })
+    image.addEventListener('error', resolve, { once: true })
+  })
+}
+
+function getSavedPlayerSnakeSkin() {
+  try {
+    var storedSkin = Number(window.localStorage.getItem('slitherNSlashPlayerSkin'))
+    if (snakeSkinConfigs[storedSkin]) return storedSkin
+  } catch (error) {}
+
+  return 1
+}
+
+selectedSnakeSkin = getSavedPlayerSnakeSkin()
+loadPlayerSnakeSkin(selectedSnakeSkin)
 highScore = getHighScore()
-setupHeroSnakePreview()
 
 canvas = document.getElementById('myCanvas')
 var gameStage = document.querySelector('.game-stage')
@@ -20,7 +77,7 @@ var settingsPauseButton = document.getElementById('settings-pause-button')
 var gameModePauseButton = document.getElementById('game-mode-pause-button')
 
 playSnakeGameBtn.addEventListener('click', handlePrimaryGameToggle)
-settingsPauseButton.addEventListener('click', toggleGamePlayback)
-gameModePauseButton.addEventListener('click', toggleGamePlayback)
+settingsPauseButton.addEventListener('click', handlePrimaryGameToggle)
+gameModePauseButton.addEventListener('click', handlePrimaryGameToggle)
 
 setupSiteControls()

@@ -2,15 +2,85 @@
 
 function resizeCanvas() {
   var rect = gameStage.getBoundingClientRect()
-  canvas.width = Math.max(getCanvasMinSide(), Math.floor(rect.width))
-  canvas.height = Math.max(getCanvasMinSide(), Math.floor(rect.height))
+  var oldWidth = canvas.width
+  var oldHeight = canvas.height
+  var arenaExpansionScale = getArenaExpansionScale()
+  var nextWidth = Math.max(getCanvasMinSide(), Math.floor(rect.width * arenaExpansionScale))
+  var nextHeight = Math.max(getCanvasMinSide(), Math.floor(rect.height * arenaExpansionScale))
+  var hasActiveWorld = snakeHead.x !== 0 || snakeHead.y !== 0
+
+  canvas.width = nextWidth
+  canvas.height = nextHeight
+
+  if (hasActiveWorld && (oldWidth !== nextWidth || oldHeight !== nextHeight)) {
+    shiftWorldForArenaResize((nextWidth - oldWidth) / 2, (nextHeight - oldHeight) / 2)
+  }
+
   renderScale = getRenderScale()
   motionScale = getMotionScale()
   segLength = 10 * renderScale
+  playerSegmentSpacing = 19 * renderScale
   arenaCornerRadius = getArenaCornerRadius()
   snakeBodyBounceRadius = 18 * renderScale
   swallowRadius = 24 * renderScale
-  gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius + 'px')
+  var baseRockSize = parseFloat(window.getComputedStyle(gameStage).getPropertyValue('--arena-rock-size')) || 420
+  gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius / arenaExpansionScale + 'px')
+  gameStage.style.setProperty('--arena-rock-tile-size', baseRockSize / arenaExpansionScale + 'px')
+  nextSnakeTrapScanAt = 0
+}
+
+function requestArenaResize() {
+  arenaResizePending = true
+}
+
+function shiftWorldForArenaResize(offsetX, offsetY) {
+  snakeHead.x += offsetX
+  snakeHead.y += offsetY
+
+  for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex++) {
+    x[segmentIndex] += offsetX
+    y[segmentIndex] += offsetY
+  }
+
+  for (var trailIndex = 0; trailIndex < snakeTrail.length; trailIndex++) {
+    snakeTrail[trailIndex].x += offsetX
+    snakeTrail[trailIndex].y += offsetY
+  }
+
+  for (var foodIndex = 0; foodIndex < foods.length; foodIndex++) {
+    foods[foodIndex].x += offsetX
+    foods[foodIndex].y += offsetY
+  }
+
+  for (var enemyIndex = 0; enemyIndex < badSnakes.length; enemyIndex++) {
+    moveBadSnake(badSnakes[enemyIndex], offsetX, offsetY)
+  }
+
+  for (var poofIndex = 0; poofIndex < centipedePoofs.length; poofIndex++) {
+    var poof = centipedePoofs[poofIndex]
+    poof.x += offsetX
+    poof.y += offsetY
+
+    for (var particleIndex = 0; particleIndex < poof.particles.length; particleIndex++) {
+      poof.particles[particleIndex].x += offsetX
+      poof.particles[particleIndex].y += offsetY
+    }
+  }
+
+  if (fireball) {
+    fireball.x += offsetX
+    fireball.y += offsetY
+  }
+
+  if (goldenMouse) {
+    goldenMouse.x += offsetX
+    goldenMouse.y += offsetY
+  }
+
+  if (steerTarget) {
+    steerTarget.x += offsetX
+    steerTarget.y += offsetY
+  }
 }
 
 function init() {
@@ -155,7 +225,7 @@ function updateGamepadPauseControl() {
   )
 
   if (menuButtonPressed && !gamepadMenuButtonPressed) {
-    toggleGamePlayback()
+    handlePrimaryGameToggle()
   }
 
   gamepadMenuButtonPressed = menuButtonPressed
@@ -187,6 +257,7 @@ function setupTouchJoystick() {
   boostMeterFill = document.getElementById('boost-meter-fill')
   boostControlGauges = document.querySelectorAll('.boost-control-gauge')
   boostVisualStates = document.querySelectorAll('.boost-visual-state')
+  boostCapacityElements = document.querySelectorAll('[data-boost-capacity]')
 
   if (joystickBox) {
     joystickBox.addEventListener('pointerdown', handleJoystickPointerDown)

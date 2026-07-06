@@ -1,16 +1,17 @@
 // Player-centipede collision response, bites, segment transfer, and removal.
 
-function bouncePlayerOffBadSnake(contactX, contactY) {
+function bouncePlayerOffBadSnake(contactX, contactY, predatorScale) {
   var normal = getCollisionNormal(
     snakeHead.x - contactX,
     snakeHead.y - contactY,
     headingAngle
   )
-  var separation = 26 * renderScale
+  predatorScale = predatorScale || 1
+  var separation = 26 * renderScale * predatorScale
   var distance = Math.hypot(snakeHead.x - contactX, snakeHead.y - contactY)
 
-  snakeHead.x += normal.x * Math.max(6 * renderScale, separation - distance)
-  snakeHead.y += normal.y * Math.max(6 * renderScale, separation - distance)
+  snakeHead.x += normal.x * Math.max(6 * renderScale * predatorScale, separation - distance)
+  snakeHead.y += normal.y * Math.max(6 * renderScale * predatorScale, separation - distance)
   headingAngle = getReflectedHeading(headingAngle, normal.x, normal.y)
   steerTarget = undefined
   steerAngleTarget = undefined
@@ -40,6 +41,20 @@ function bounceSnakeHeadsApart(enemySnake) {
   applyRoundedSnakeBounds()
   recordSnakeHeadTrail()
   updateSnakeBodyFromTrail()
+}
+
+function pushBadSnakeAwayFromDominantPlayer(enemySnake, playerContactX, playerContactY, enemyContactX, enemyContactY) {
+  var normal = getCollisionNormal(
+    enemyContactX - playerContactX,
+    enemyContactY - playerContactY,
+    enemySnake.heading
+  )
+  var pushDistance = 22 * renderScale
+
+  moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
+  enemySnake.heading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
+  enemySnake.wanderAngle = enemySnake.heading
+  enemySnake.nextWanderAt = Date.now() + 500
 }
 
 function getCollisionNormal(dx, dy, incomingHeading) {
@@ -122,6 +137,8 @@ function getPlayerBodyHitIndex(pointX, pointY, radius) {
 }
 
 function getEnemyBodyHitIndex(enemySnake, pointX, pointY, radius) {
+  radius *= Math.max(getPlayerSizeScale(), enemySnake.collisionScale || 1)
+
   for (var i = 0; i < enemySnake.segments.length; i++) {
     var segment = enemySnake.segments[i]
     if (arePointsTouching(pointX, pointY, segment.x, segment.y, radius)) return i
@@ -141,6 +158,12 @@ function removePlayerSegments(count) {
   score = Math.max(0, score - removedSegments)
   updateScoreDisplay()
 
+  var nextMaxEnergy = getBoostDuration()
+  boostEnergy = Math.min(boostEnergy, nextMaxEnergy)
+  boostCoolingDown = !boosting && boostEnergy < nextMaxEnergy
+  updateBoostMeterStatus(true)
+  requestArenaResize()
+
   return removedSegments
 }
 
@@ -158,10 +181,19 @@ function removeBadSnakeSegments(enemySnake, count) {
   return removedSegments
 }
 
+function getPlayerBiteSegments() {
+  return n >= playerBiteUpgradeLength
+    ? upgradedPlayerBiteSegments
+    : snakeBiteSegments
+}
+
 function removeBadSnake(enemySnake) {
   var index = badSnakes.indexOf(enemySnake)
   if (index >= 0) {
     badSnakes.splice(index, 1)
+    if (enemySnake.species === 'tree-snake') {
+      nextTreeSnakeSpawnAt = Date.now() + treeSnakeRespawnDelay
+    }
   }
 }
 

@@ -3,6 +3,11 @@
 function animate() {
   if (playing) {
     if (a === 0) {
+      if (arenaResizePending) {
+        arenaResizePending = false
+        resizeCanvas()
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       updateGamepadControls()
       updateBerserkerStatus()
@@ -45,12 +50,8 @@ function animate() {
           }
 
           if (foods[i].isBad && !isBerserkerActive()) {
-            n = startingSegments
-            x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
-            y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
-            resetSnakeBody()
-            score = 0
-            updateScoreDisplay()
+            var poisonDamage = Math.max(1, Math.round(n * poisonBeetleDamageFraction))
+            removePlayerSegments(poisonDamage)
             playSound('badFoodSound')
           } else {
             var growthValue = foods[i].isBad ? 1 : foods[i].growthValue || 1
@@ -91,11 +92,20 @@ function animate() {
 
 
       if (goldenMouse) {
-        if (isSnakeTouchingEntity(goldenMouse, 24 * renderScale)) {
+        var goldenMouseSwallowRadius = goldenMouse.swallowRadius || 24 * renderScale
+
+        if (isSnakeTouchingEntity(goldenMouse, goldenMouseSwallowRadius)) {
           if (isBerserkerRecoveryActive()) {
-            repelEntityFromSnake(goldenMouse, 36 * renderScale)
+            repelEntityFromSnake(goldenMouse, goldenMouseSwallowRadius + 12 * renderScale)
             drawGoldenMouse(goldenMouse)
           } else {
+            var goldenMouseGrowth = goldenMouse.growthValue || mouseGrowthValue
+
+            n += goldenMouseGrowth
+            score += goldenMouseGrowth
+            updateScoreDisplay()
+            addSnakeSegments(goldenMouseGrowth)
+            if (score > highScore) setHighScore(score)
             activateBerserker()
             goldenMouse = undefined
             scheduleNextGoldenMouse()

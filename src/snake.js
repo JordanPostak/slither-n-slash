@@ -1,26 +1,67 @@
 // Player snake rendering, face and tail art, trail following, and corner cutting.
 
 function drawSnake() {
-  drawSnakeTail()
+  var renderStride = getSnakeRenderStride()
 
-  for (var i = x.length - 2; i >= 0; i--) {
-    drawSnakeSegment(i)
+  if (x.length > 0) {
+    drawSnakeSegment(0)
   }
+
+  var lastRenderedIndex = 0
+  for (var i = 1; i < x.length; i += renderStride) {
+    drawSnakeSegment(i)
+    lastRenderedIndex = i
+  }
+
+  if (x.length > 1 && lastRenderedIndex !== x.length - 1) {
+    drawSnakeSegment(x.length - 1)
+  }
+
+  drawSnakeTail()
+  drawSnakeFrontOverlaps(renderStride)
+}
+
+function getSnakeRenderStride() {
+  return Math.min(3, Math.max(1, Math.ceil(x.length / 250)))
+}
+
+function getPlayerSizeScale() {
+  var extraSegments = Math.max(0, n - startingSegments)
+  return 1 + Math.log1p(extraSegments) * 0.26
+}
+
+function getArenaExpansionScale() {
+  var extraSegments = Math.max(0, n - startingSegments)
+  return 1 + Math.log1p(extraSegments) * 0.12
+}
+
+function getPlayerTurnRate() {
+  var extraSegments = Math.max(0, n - startingSegments)
+  var referenceExtraSegments = Math.max(1, turnRadiusReferenceLength - startingSegments)
+  var turnPenalty = 1 + Math.sqrt(extraSegments / referenceExtraSegments)
+  return turnRate / turnPenalty
+}
+
+function getPlayerSpeedScale() {
+  var extraSegments = Math.max(0, n - startingSegments)
+  return 1 + Math.log1p(extraSegments) * 0.04
 }
 
 function drawSnakeSegment(i) {
-  var leaderX = i === 0 ? snakeHead.x : x[i - 1]
-  var leaderY = i === 0 ? snakeHead.y : y[i - 1]
-  var angle = Math.atan2(leaderY - y[i], leaderX - x[i])
+  var pose = getSnakeSegmentRenderPose(i)
+  var angle = pose.angle
+  var playerSizeScale = pose.sizeScale
 
   ctx.save()
-  ctx.translate(x[i], y[i])
-  ctx.rotate(angle + Math.PI / 2)
+  ctx.translate(pose.x, pose.y)
+  ctx.rotate(angle + Math.PI)
 
-  var segmentImage = i === 0 ? wormHeadImage : wormBodyImage
+  var segmentImage = i === 0
+    ? wormHeadImage
+    : wormBodyImages[(i - 1) % wormBodyImages.length]
   var imageReady = segmentImage.complete && segmentImage.naturalWidth > 0
-  var segmentWidth = (i === 0 ? 28 : 24) * renderScale
-  var segmentHeight = (i === 0 ? 46 : 34) * renderScale
+  var segmentWidth = (i === 0 ? 44 : 30) * renderScale * playerSizeScale
+  var segmentHeight = (i === 0 ? 24 : 18) * renderScale * playerSizeScale
 
   if (imageReady) {
     ctx.drawImage(
@@ -30,9 +71,6 @@ function drawSnakeSegment(i) {
       segmentWidth,
       segmentHeight
     )
-    if (i === 0) {
-      drawSnakeFace(segmentWidth, segmentHeight)
-    }
     ctx.restore()
     return
   }
@@ -46,7 +84,7 @@ function drawSnakeSegment(i) {
 
   ctx.fillStyle = segColor
   ctx.beginPath()
-  ctx.arc(0, 0, segLength / 2, 0, Math.PI * 2)
+  ctx.arc(0, 0, playerSegmentSpacing / 2 * playerSizeScale, 0, Math.PI * 2)
   ctx.fill()
 
   if (i === 0) {
@@ -54,6 +92,26 @@ function drawSnakeSegment(i) {
   }
 
   ctx.restore()
+}
+
+function getSnakeSegmentRenderPose(i) {
+  var leaderX = i === 0 ? snakeHead.x : x[i - 1]
+  var leaderY = i === 0 ? snakeHead.y : y[i - 1]
+  var followerX = i < x.length - 1 ? x[i + 1] : x[i]
+  var followerY = i < y.length - 1 ? y[i + 1] : y[i]
+  var angle = i === 0
+    ? Math.atan2(leaderY - y[i], leaderX - x[i])
+    : Math.atan2(leaderY - followerY, leaderX - followerX)
+  var playerSizeScale = getPlayerSizeScale()
+  var headOffset = i === 0 ? 14 * renderScale * playerSizeScale : 0
+  var bodyPivotOffset = i === 0 ? 0 : 2.5 * renderScale * playerSizeScale
+
+  return {
+    x: x[i] + Math.cos(angle) * (headOffset - bodyPivotOffset),
+    y: y[i] + Math.sin(angle) * (headOffset - bodyPivotOffset),
+    angle: angle,
+    sizeScale: playerSizeScale,
+  }
 }
 
 function drawSnakeFace(segmentWidth, segmentHeight) {
@@ -118,11 +176,29 @@ function drawSnakeFaceOnContext(drawingContext, segmentWidth, segmentHeight, fac
 function drawSnakeTail() {
   if (x.length < 2) return
 
-  var tailIndex = x.length - 1
-  var beforeTailIndex = tailIndex - 1
-  var tailAngle = Math.atan2(y[tailIndex] - y[beforeTailIndex], x[tailIndex] - x[beforeTailIndex])
-  var tailX = x[tailIndex] + Math.cos(tailAngle) * 8 * renderScale
-  var tailY = y[tailIndex] + Math.sin(tailAngle) * 8 * renderScale
+  var tailPose = getSnakeTailRenderPose()
+  var tailAngle = tailPose.angle
+  var playerSizeScale = tailPose.sizeScale
+  var tailX = tailPose.x
+  var tailY = tailPose.y
+
+  if (wormTailImage.complete && wormTailImage.naturalWidth > 0) {
+    var tailWidth = 52 * renderScale * playerSizeScale
+    var tailHeight = 18 * renderScale * playerSizeScale
+
+    ctx.save()
+    ctx.translate(tailX, tailY)
+    ctx.rotate(tailAngle)
+    ctx.drawImage(
+      wormTailImage,
+      -tailWidth / 2,
+      -tailHeight / 2,
+      tailWidth,
+      tailHeight
+    )
+    ctx.restore()
+    return
+  }
 
   ctx.save()
   ctx.translate(tailX, tailY)
@@ -136,18 +212,8 @@ function drawSnakeTail() {
   ctx.quadraticCurveTo(-7, 4, -7, -4)
   ctx.closePath()
 
-  var bodyImageReady = wormBodyImage.complete && wormBodyImage.naturalWidth > 0
-
-  if (bodyImageReady) {
-    ctx.save()
-    ctx.clip()
-    ctx.rotate(Math.PI / 2)
-    ctx.drawImage(wormBodyImage, -17, -13, 34, 26)
-    ctx.restore()
-  } else {
-    ctx.fillStyle = '#e4c84c'
-    ctx.fill()
-  }
+  ctx.fillStyle = '#e4c84c'
+  ctx.fill()
 
   ctx.strokeStyle = '#7c5f12'
   ctx.lineWidth = 1.2
@@ -161,6 +227,125 @@ function drawSnakeTail() {
   ctx.stroke()
 
   ctx.restore()
+}
+
+function getSnakeTailRenderPose() {
+  var tailIndex = x.length - 1
+  var beforeTailIndex = Math.max(0, tailIndex - 1)
+  var tailAngle = Math.atan2(y[tailIndex] - y[beforeTailIndex], x[tailIndex] - x[beforeTailIndex])
+  var playerSizeScale = getPlayerSizeScale()
+
+  return {
+    x: x[tailIndex] + Math.cos(tailAngle) * 24 * renderScale * playerSizeScale,
+    y: y[tailIndex] + Math.sin(tailAngle) * 24 * renderScale * playerSizeScale,
+    angle: tailAngle,
+    sizeScale: playerSizeScale,
+  }
+}
+
+function drawSnakeFrontOverlaps(renderStride) {
+  if (x.length < 6) return
+
+  var playerSizeScale = getPlayerSizeScale()
+  var bodyRadius = 15 * renderScale * playerSizeScale
+  var headRadius = 22 * renderScale * playerSizeScale
+  var tailRadius = 26 * renderScale * playerSizeScale
+  var bucketSize = Math.max(1, bodyRadius * 2)
+  var bucketSearchRadius = Math.ceil((headRadius + tailRadius) / bucketSize)
+  var layerPoints = []
+  var buckets = {}
+  var overlapPairs = []
+
+  for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex += renderStride) {
+    var segmentPose = getSnakeSegmentRenderPose(segmentIndex)
+    var layerPoint = {
+      index: segmentIndex,
+      x: segmentPose.x,
+      y: segmentPose.y,
+      radius: segmentIndex === 0 ? headRadius : bodyRadius,
+    }
+    layerPoints.push(layerPoint)
+    addSnakeLayerPointToBucket(layerPoint, bucketSize, buckets)
+  }
+
+  var lastSegmentIndex = x.length - 1
+  if (layerPoints[layerPoints.length - 1].index !== lastSegmentIndex) {
+    var lastSegmentPose = getSnakeSegmentRenderPose(lastSegmentIndex)
+    var lastLayerPoint = {
+      index: lastSegmentIndex,
+      x: lastSegmentPose.x,
+      y: lastSegmentPose.y,
+      radius: bodyRadius,
+    }
+    layerPoints.push(lastLayerPoint)
+    addSnakeLayerPointToBucket(lastLayerPoint, bucketSize, buckets)
+  }
+
+  var tailPose = getSnakeTailRenderPose()
+  addSnakeLayerPointToBucket({
+    index: x.length,
+    x: tailPose.x,
+    y: tailPose.y,
+    radius: tailRadius,
+  }, bucketSize, buckets)
+
+  for (var frontIndex = layerPoints.length - 1; frontIndex >= 0; frontIndex--) {
+    var frontPoint = layerPoints[frontIndex]
+    var bucketX = Math.floor(frontPoint.x / bucketSize)
+    var bucketY = Math.floor(frontPoint.y / bucketSize)
+
+    for (var offsetX = -bucketSearchRadius; offsetX <= bucketSearchRadius; offsetX++) {
+      for (var offsetY = -bucketSearchRadius; offsetY <= bucketSearchRadius; offsetY++) {
+        var bucket = buckets[(bucketX + offsetX) + ':' + (bucketY + offsetY)] || []
+
+        for (var candidateIndex = 0; candidateIndex < bucket.length; candidateIndex++) {
+          var backPoint = bucket[candidateIndex]
+          if (backPoint.index < frontPoint.index + 5) continue
+
+          var dx = backPoint.x - frontPoint.x
+          var dy = backPoint.y - frontPoint.y
+          var overlapDistance = frontPoint.radius + backPoint.radius
+          var distanceSquared = dx * dx + dy * dy
+          if (distanceSquared >= overlapDistance * overlapDistance) continue
+
+          overlapPairs.push({
+            frontPoint: frontPoint,
+            backPoint: backPoint,
+            distanceSquared: distanceSquared,
+          })
+        }
+      }
+    }
+  }
+
+  overlapPairs.sort(function (firstPair, secondPair) {
+    return firstPair.frontPoint.index - secondPair.frontPoint.index ||
+      firstPair.distanceSquared - secondPair.distanceSquared
+  })
+  if (overlapPairs.length > maxSnakeOverlapRedraws) {
+    overlapPairs.length = maxSnakeOverlapRedraws
+  }
+  overlapPairs.sort(function (firstPair, secondPair) {
+    return secondPair.frontPoint.index - firstPair.frontPoint.index
+  })
+
+  for (var pairIndex = 0; pairIndex < overlapPairs.length; pairIndex++) {
+    var overlapPair = overlapPairs[pairIndex]
+    var overlapBackPoint = overlapPair.backPoint
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(overlapBackPoint.x, overlapBackPoint.y, overlapBackPoint.radius, 0, Math.PI * 2)
+    ctx.clip()
+    drawSnakeSegment(overlapPair.frontPoint.index)
+    ctx.restore()
+  }
+}
+
+function addSnakeLayerPointToBucket(point, bucketSize, buckets) {
+  var key = Math.floor(point.x / bucketSize) + ':' + Math.floor(point.y / bucketSize)
+  if (!buckets[key]) buckets[key] = []
+  buckets[key].push(point)
 }
 
 function changes(length) {
@@ -196,7 +381,7 @@ function recordSnakeHeadTrail() {
 }
 
 function trimSnakeTrail() {
-  var requiredLength = (n + 3) * segLength + 30 * renderScale
+  var requiredLength = (n + 3) * playerSegmentSpacing + 30 * renderScale
   var accumulatedLength = 0
   var keepFromIndex = 0
 
@@ -230,7 +415,7 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
   var accumulatedLength = 0
 
   for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
-    var targetDistance = (segmentIndex + 1) * segLength
+    var targetDistance = (segmentIndex + 1) * playerSegmentSpacing
     var positionFound = false
 
     while (olderPointIndex >= 0) {
@@ -279,8 +464,8 @@ function applySnakeCornerCut(previousX, previousY) {
     var distance = Math.sqrt(dx * dx + dy * dy)
 
     if (distance > 0.001) {
-      var shortcutX = leadX - dx / distance * segLength
-      var shortcutY = leadY - dy / distance * segLength
+      var shortcutX = leadX - dx / distance * playerSegmentSpacing
+      var shortcutY = leadY - dy / distance * playerSegmentSpacing
       x[segmentIndex] += (shortcutX - x[segmentIndex]) * snakeCornerCutStrength
       y[segmentIndex] += (shortcutY - y[segmentIndex]) * snakeCornerCutStrength
     }
@@ -302,12 +487,14 @@ function addSnakeSegments(count) {
   boostEnergy = Math.min(nextMaxEnergy, boostEnergy + addedCapacity)
   boostCoolingDown = !boosting && boostEnergy < nextMaxEnergy
   updateSnakeBodyFromTrail()
+  updateBoostMeterStatus(true)
+  requestArenaResize()
 }
 
 function resetSnakeBody() {
   snakeTrail = []
 
-  var trailLength = (n + 3) * segLength
+  var trailLength = (n + 3) * playerSegmentSpacing
   var pointSpacing = Math.max(1.5, 2.5 * renderScale)
 
   for (var distance = trailLength; distance > 0; distance -= pointSpacing) {

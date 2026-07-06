@@ -25,7 +25,7 @@
     <meta property="og:description" content="Grow, battle, boost, and trap creatures in this free arcade snake game from Postak Creations." />
     <meta property="og:type" content="website" />
     <title>Slither N' Slash | Free Browser Game</title>
-    <link rel="icon" type="image/png" href="./assets/snake_head.png" />
+    <link rel="icon" type="image/png" href="./assets/Snake1/snake1-head.png" />
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
@@ -33,7 +33,7 @@
 
     <header class="site-header">
       <a class="brand" href="#home" aria-label="Slither N' Slash home">
-        <img src="./assets/snake_head.png" alt="" width="48" height="48" />
+        <img src="./assets/Snake1/snake1-head.png" alt="" width="48" height="48" />
         <span>Slither <b>N' Slash</b></span>
       </a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu</button>
@@ -82,9 +82,9 @@
         </div>
         <div class="instruction-grid">
           <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad. Pause to reposition landscape controls.</p></article>
-          <article><span>2</span><h3>Feed</h3><p>Eat grubs, mice, and orange balls to grow. Poison beetles are dangerous after their blue two-second arrival shield fades.</p></article>
-          <article><span>3</span><h3>Boost</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b>. Release to recharge. Longer snakes gain more boost capacity.</p></article>
-          <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures slow and turn orange for three seconds; keep the loop closed until they become food.</p></article>
+          <article><span>2</span><h3>Feed</h3><p>Eat grubs and orange balls to grow. At 100 segments, large mice begin appearing and add six segments. After their blue arrival shield fades, poison beetles remove 25% of your current length.</p></article>
+          <article><span>3</span><h3>Grow</h3><p>Growth has no set limit: longer snakes become thicker and faster, encounter longer centipedes, and turn more widely as the arena keeps expanding. Large mice and the Green Tree Snake predator unlock at 100 segments. Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost.</p></article>
+          <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures progressively slow and turn orange; larger or longer creatures take more time relative to your snake. Keep the loop closed until they become food.</p></article>
         </div>
       </section>
 
@@ -96,15 +96,15 @@
         <div class="preview-grid">
           <figure class="game-preview preview-hunt">
             <div class="preview-scene"><span class="mini-snake"></span><span class="mini-target"></span></div>
-            <figcaption><b>Hunt</b><span>Grubs add one segment and mice add three. Avoid poison beetles, or trap them and wait for a safe orange reward.</span></figcaption>
+            <figcaption><b>Hunt</b><span>Grubs add one segment. Large mice unlock at 100 segments and add six. Avoid poison beetles, or trap them and wait for a safe orange reward.</span></figcaption>
           </figure>
           <figure class="game-preview preview-rivals">
             <div class="preview-scene"><span class="mini-snake"></span><span class="rival-snake"></span></div>
-            <figcaption><b>Battle</b><span>Centipedes and your snake collide and bounce. Bite their bodies, protect yours, or surround the entire enemy to transform it.</span></figcaption>
+            <figcaption><b>Battle</b><span>Centipedes only hunt you when nearby; at a distance they fight over food. At 100 segments your six-segment bites overpower centipedes, but a larger Green Tree Snake enters with 50 body segments. It stays one fixed adult size and grows only by adding more segments.</span></figcaption>
           </figure>
           <figure class="game-preview preview-power">
             <div class="preview-scene"><span class="mini-snake"></span><span class="power-flare">&#9876;</span></div>
-            <figcaption><b>Power up</b><span>The Golden Mouse starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
+            <figcaption><b>Power up</b><span>After 100 segments, the Golden Mouse can appear. It adds six segments and starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
           </figure>
         </div>
         <p class="mobile-swipe-hint" aria-hidden="true">Swipe to see more &#8594;</p>
@@ -133,12 +133,39 @@
           </div>
           <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost control">
             <div class="control-position-handle" aria-hidden="true">&#8597;</div>
-            <div class="control-box-label">Boost</div>
+            <div class="control-box-label">Boost <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
             <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
           </div>
 
           <section class="game-stage" aria-label="Slither N' Slash arena">
             <canvas width="400" height="400" id="myCanvas"></canvas>
+            <div id="snake-select-screen" class="snake-select-screen" role="dialog" aria-modal="true" aria-labelledby="snake-select-title" hidden>
+              <div class="snake-select-panel">
+                <p class="eyebrow">Choose your snake</p>
+                <h3 id="snake-select-title">Pick a player skin</h3>
+                <div class="snake-skin-grid" role="radiogroup" aria-label="Player snake skins">
+                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="1" aria-checked="false">
+                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake1/snake1-head.png" alt="" /><img src="./assets/Snake1/snake1-body1.png" alt="" /><img src="./assets/Snake1/snake1-body2.png" alt="" /><img src="./assets/Snake1/snake1-tail.png" alt="" /></span><span>Snake 1</span>
+                  </button>
+                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="2" aria-checked="false">
+                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake2/snake2-head.png" alt="" /><img src="./assets/Snake2/snake2-body1.png" alt="" /><img src="./assets/Snake2/snake2-body2.png" alt="" /><img src="./assets/Snake2/snake2-tail.png" alt="" /></span><span>Snake 2</span>
+                  </button>
+                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="3" aria-checked="false">
+                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake3/snake3-head.png" alt="" /><img src="./assets/Snake3/snake3-body1.png" alt="" /><img src="./assets/Snake3/snake3-body2.png" alt="" /><img src="./assets/Snake3/snake3-tail.png" alt="" /></span><span>Snake 3</span>
+                  </button>
+                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="4" aria-checked="false">
+                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake4/snake4-head.png" alt="" /><img src="./assets/Snake4/snake4-body1.png" alt="" /><img src="./assets/Snake4/snake4-body2.png" alt="" /><img src="./assets/Snake4/snake4-tail.png" alt="" /></span><span>Snake 4</span>
+                  </button>
+                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="5" aria-checked="false">
+                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake5/snake5-head.png" alt="" /><img src="./assets/Snake5/snake5-body1.png" alt="" /><img src="./assets/Snake5/snake5-body2.png" alt="" /><img src="./assets/Snake5/snake5-tail.png" alt="" /></span><span>Snake 5</span>
+                  </button>
+                </div>
+                <div class="snake-select-actions">
+                  <button id="snake-select-cancel" class="tool-button" type="button">Back</button>
+                  <button id="snake-select-start" class="snake-select-start" type="button">Start Run</button>
+                </div>
+              </div>
+            </div>
             <button id="game-toggle" class="play-snake-game-btn" type="button">Start Game</button>
           </section>
 
@@ -158,14 +185,14 @@
               <span class="berserker-status-label">Berserker</span>
               <span id="berserker-time">10</span>s
             </div>
-            <div class="boost-label">Boost</div>
+            <div class="boost-label">Boost <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
             <div class="boost-panel-display boost-visual-state" aria-label="Boost charge">
               <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
             </div>
             <div class="boost-meter" aria-label="Boost meter"><div id="boost-meter-fill" class="boost-meter-fill"></div></div>
           </aside>
         </div>
-        <p class="game-note">Your high score is saved only in this browser. No sign-in is needed.</p>
+        <p class="game-note">Your selected snake skin and high score are saved only in this browser. No sign-in is needed.</p>
       </section>
 
       <section id="about" class="content-section split-section" aria-labelledby="about-title">
@@ -180,8 +207,8 @@
             moving prey, solid centipede combat, body-loop trapping, glowing rewards, and rare power-ups.
           </p>
           <p>
-            Close any section of your body into a loop to trap enclosed creatures. Keep the loop closed for three
-            seconds while they slow down and turn orange; opening it early lets them recover and escape. Completed
+            Close any section of your body into a loop to trap enclosed creatures. Keep the loop closed while their
+            bodies slow down and turn orange; larger or longer prey takes more time, and opening early lets them recover and escape. Completed
             transformations create stationary orange food that both you and centipedes can eat.
           </p>
           <p>
@@ -195,7 +222,7 @@
       <section id="news" class="content-section" aria-labelledby="news-title">
         <div class="section-heading"><p class="eyebrow">News &amp; changelog</p><h2 id="news-title">What's new</h2></div>
         <div class="changelog">
-          <article><time datetime="2026-07-04">July 4, 2026</time><h3>v0.5.0 — Trap &amp; Transform</h3><ul><li>Added body-loop traps for centipedes, grubs, mice, and poison beetles.</li><li>Trapped creatures now slow down, turn orange, and become stationary food after three seconds; breaking the loop lets them escape.</li><li>Reworked solid collisions, centipede bites, and trail-following snake movement.</li><li>Fireballs now burn only poison beetles into orange rewards, while Golden Mice activate Berserker mode.</li><li>Added two-second poison-beetle arrival protection and two-second post-Berserker recovery.</li><li>Improved mobile play mode, adjustable controls, page navigation, and responsive layouts.</li></ul></article>
+          <article><time datetime="2026-07-04">July 4, 2026</time><h3>v0.5.0 — Trap &amp; Transform</h3><ul><li>Added five selectable player snake skins before the first run.</li><li>Added body-loop traps for centipedes, grubs, mice, poison beetles, and larger predators.</li><li>Trapped creatures progressively slow and turn orange; transformation time now scales with their size and length compared with the player.</li><li>Reworked solid collisions, centipede bites, and trail-following snake movement.</li><li>Fireballs now burn only poison beetles into orange rewards, while Golden Mice activate Berserker mode.</li><li>Added two-second poison-beetle arrival protection and two-second post-Berserker recovery.</li><li>Improved mobile play mode, adjustable controls, page navigation, and responsive layouts.</li></ul></article>
           <article><time datetime="2026-07-03">July 3, 2026</time><h3>v0.4.1</h3><ul><li>Added the Golden Mouse and Berserker power-up.</li><li>Improved rival snake behavior.</li><li>Refined mobile controls and boost feedback.</li></ul></article>
         </div>
       </section>
@@ -206,9 +233,9 @@
           <details><summary>Is Slither N' Slash free?</summary><p>Yes. The game is free to play in your browser and does not require an account.</p></details>
           <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and boost control. Landscape play provides the largest arena view, and you can pause to slide both control boxes to a comfortable height.</p></details>
           <details><summary>Can I save my progress?</summary><p>Your high score is stored in this browser. A paused run remains available while the page stays open, but active runs and high scores do not sync between devices.</p></details>
-          <details><summary>How does trapping work?</summary><p>Make a closed loop with any part of your snake's body. Fully enclosed creatures slow and turn orange over three seconds. Keep the loop intact until they become orange balls; if it opens early, they recover and escape.</p></details>
-          <details><summary>How do power-ups work?</summary><p>The rare Golden Mouse activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>
-          <details><summary>What do poison beetles do?</summary><p>A poison beetle can reset your current run unless Berserker mode protects you. New beetles have a visible blue two-second arrival shield, and trapping or burning one converts it into safe food.</p></details>
+          <details><summary>How does trapping work?</summary><p>Make a closed loop with any part of your snake's body. Fully enclosed creatures progressively slow and turn orange without a separate trap ring. Larger or longer creatures take more time relative to your snake. Keep the loop intact until they become orange balls; if it opens early, they recover and escape.</p></details>
+          <details><summary>How do power-ups work?</summary><p>Once your snake reaches 100 segments, the rare Golden Mouse can appear. It adds six segments and activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>
+          <details><summary>What do poison beetles do?</summary><p>A poison beetle removes 25% of your current length unless Berserker mode protects you; it cannot reduce the snake below its starting length. New beetles have a visible blue two-second arrival shield, and trapping or burning one converts it into safe food.</p></details>
           <details><summary>Do I need to create an account?</summary><p>No. Slither N' Slash currently has no user accounts and does not ask for personal information to play.</p></details>
         </div>
       </section>
@@ -260,7 +287,7 @@
     </main>
 
     <footer class="site-footer">
-      <a class="brand footer-brand" href="#home"><img src="./assets/snake_head.png" alt="" width="38" height="38" /><span>Slither N' Slash</span></a>
+      <a class="brand footer-brand" href="#home"><img src="./assets/Snake1/snake1-head.png" alt="" width="38" height="38" /><span>Slither N' Slash</span></a>
       <p>&copy; <span id="copyright-year">2026</span> Postak Creations. All rights reserved.</p>
       <nav aria-label="Legal links"><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#contact">Contact</a></nav>
     </footer>
@@ -281,6 +308,7 @@
     <script src="./src/traps.js" defer></script>
     <script src="./src/centipede-combat.js" defer></script>
     <script src="./src/centipede-render.js" defer></script>
+    <script src="./src/tree-snake-render.js" defer></script>
     <script src="./src/collisions.js" defer></script>
     <script src="./src/snake.js" defer></script>
     <script src="./src/world.js" defer></script>

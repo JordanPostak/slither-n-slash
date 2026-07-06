@@ -7,7 +7,13 @@ function generateFood(foodType) {
 
   var isBad = foodType === 'beetle'
   var isGrub = foodType === 'grub'
-  var spawn = getOffscreenSpawn(isGrub ? getRandomGrubSpeed() : getRandomFoodSpeed(), 24 * renderScale)
+  var isMouse = foodType === 'mouse'
+  var sizeScale = isMouse ? mouseBaseSizeScale : 1
+  var baseGrowthValue = isBad ? 0 : isGrub ? 1 : mouseGrowthValue
+  var spawn = getOffscreenSpawn(
+    isGrub ? getRandomGrubSpeed() : getRandomFoodSpeed(),
+    24 * renderScale * sizeScale
+  )
   var now = Date.now()
 
   return {
@@ -17,8 +23,11 @@ function generateFood(foodType) {
     dy: spawn.dy,
     facingAngle: Math.atan2(spawn.dy, spawn.dx),
     type: foodType,
-    growthValue: isBad ? 0 : isGrub ? 1 : 3,
-    swallowRadius: (isGrub ? 30 : 24) * renderScale,
+    sizeScale: sizeScale,
+    growthValue: isMouse
+      ? mouseGrowthValue
+      : baseGrowthValue ? Math.max(baseGrowthValue, Math.round(baseGrowthValue * sizeScale)) : 0,
+    swallowRadius: (isGrub ? 30 : 24) * renderScale * sizeScale,
     expiresAt: getFoodExpiresAt(foodType, now),
     isBad: isBad,
     initialized: true,
@@ -43,7 +52,15 @@ function getRandomMouseVelocity() {
 function startFoodTimer() {
   stopFoodTimer()
 
-  spawnTimedFood('grub')
+  var activeGrubCount = 0
+  for (var foodIndex = 0; foodIndex < foods.length; foodIndex++) {
+    if (foods[foodIndex].type === 'grub') activeGrubCount++
+  }
+
+  for (var grubIndex = activeGrubCount; grubIndex < grubStartCount; grubIndex++) {
+    spawnTimedFood('grub')
+  }
+
   foodSpawnIntervalIds.push(window.setInterval(function () {
     if (playing) {
       spawnTimedFood('grub')
@@ -64,6 +81,8 @@ function startFoodTimer() {
 }
 
 function spawnTimedFood(foodType) {
+  if (foodType === 'mouse' && n < mouseUnlockLength) return
+
   foods.push(generateFood(foodType))
 }
 
@@ -93,8 +112,10 @@ function stopBadSnakeTimer() {
 
 function getPointerPos(canvasElement, clientX, clientY) {
   var rect = canvasElement.getBoundingClientRect()
-  var pointerX = Math.max(0, Math.min(canvas.width - 1, clientX - rect.left))
-  var pointerY = Math.max(0, Math.min(canvas.height - 1, clientY - rect.top))
+  var scaleX = canvas.width / Math.max(1, rect.width)
+  var scaleY = canvas.height / Math.max(1, rect.height)
+  var pointerX = Math.max(0, Math.min(canvas.width - 1, (clientX - rect.left) * scaleX))
+  var pointerY = Math.max(0, Math.min(canvas.height - 1, (clientY - rect.top) * scaleY))
 
   return {
     x: pointerX,

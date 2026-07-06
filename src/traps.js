@@ -4,11 +4,15 @@ function updateTrappedCrush(enemySnake, trapLoop, now) {
   if (!trapLoop) {
     enemySnake.crushStartedAt = 0
     enemySnake.crushProgress = 0
+    enemySnake.crushDuration = 0
     return false
   }
 
-  if (!enemySnake.crushStartedAt) enemySnake.crushStartedAt = now
-  enemySnake.crushProgress = Math.min(1, (now - enemySnake.crushStartedAt) / trappedCrushDuration)
+  if (!enemySnake.crushStartedAt) {
+    enemySnake.crushStartedAt = now
+    enemySnake.crushDuration = getTrappedCrushDuration(enemySnake)
+  }
+  enemySnake.crushProgress = Math.min(1, (now - enemySnake.crushStartedAt) / enemySnake.crushDuration)
 
   if (enemySnake.crushProgress < 1) return false
 
@@ -42,7 +46,10 @@ function updateTrappedFoods(snakeTrapLoops) {
     }
 
     if (updateTrappedFoodCrush(food, trapLoop, now)) {
-      foods[i] = createOrangeRewardOrb(food, Math.max(1, food.growthValue || 1))
+      foods[i] = createOrangeRewardOrb(
+        food,
+        Math.max(1, food.growthValue || Math.round(food.sizeScale || 1))
+      )
     } else {
       food.isTrapped = Boolean(trapLoop)
     }
@@ -53,16 +60,35 @@ function updateTrappedFoodCrush(food, trapLoop, now) {
   if (!trapLoop) {
     food.crushStartedAt = 0
     food.crushProgress = 0
+    food.crushDuration = 0
     return false
   }
 
-  if (!food.crushStartedAt) food.crushStartedAt = now
-  food.crushProgress = Math.min(1, (now - food.crushStartedAt) / trappedCrushDuration)
+  if (!food.crushStartedAt) {
+    food.crushStartedAt = now
+    food.crushDuration = getTrappedCrushDuration(food)
+  }
+  food.crushProgress = Math.min(1, (now - food.crushStartedAt) / food.crushDuration)
 
   if (food.crushProgress < 1) return false
 
   spawnOrangePoof([{ x: food.x, y: food.y }])
   return true
+}
+
+function getTrappedCrushDuration(entity) {
+  var playerMass = Math.max(1, n * getPlayerSizeScale())
+  var entityScale = entity.collisionScale || entity.sizeScale || 1
+  var entityMass
+
+  if (entity.segments) {
+    entityMass = (entity.segments.length + 1) * entityScale * entityScale
+  } else {
+    var foodMass = entity.type === 'mouse' ? 3 : entity.isBad ? 1.4 : 1
+    entityMass = foodMass * entityScale * entityScale
+  }
+
+  return trappedCrushDuration * (0.75 + Math.sqrt(entityMass / playerMass))
 }
 
 function nudgeTrappedBadSnake(enemySnake, contactX, contactY, enemyContactX, enemyContactY) {
@@ -77,7 +103,8 @@ function nudgeTrappedBadSnake(enemySnake, contactX, contactY, enemyContactX, ene
     enemySnake.heading
   )
 
-  moveBadSnake(enemySnake, normal.x * 2.5 * renderScale, normal.y * 2.5 * renderScale)
+  var predatorScale = enemySnake.collisionScale || 1
+  moveBadSnake(enemySnake, normal.x * 2.5 * renderScale * predatorScale, normal.y * 2.5 * renderScale * predatorScale)
   enemySnake.heading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 350
@@ -171,7 +198,9 @@ function spawnCentipedeOrbs(enemySnake) {
   }
 }
 
-function createOrangeRewardOrb(source, growthValue) {
+function createOrangeRewardOrb(source, growthValue, sizeScale) {
+  var rewardSizeScale = sizeScale || source.sizeScale || 1
+
   return {
     x: source.x,
     y: source.y,
@@ -179,8 +208,9 @@ function createOrangeRewardOrb(source, growthValue) {
     dy: 0,
     facingAngle: 0,
     type: 'centipede-orb',
+    sizeScale: rewardSizeScale,
     growthValue: growthValue,
-    swallowRadius: 17 * renderScale,
+    swallowRadius: 17 * renderScale * rewardSizeScale,
     expiresAt: 0,
     isBad: false,
     initialized: true,
@@ -198,9 +228,10 @@ function bounceBadSnakeOffPlayer(enemySnake, contactX, contactY) {
     enemySnake.head.y - contactY,
     enemySnake.heading
   )
-  var separation = 24 * renderScale
+  var predatorScale = enemySnake.collisionScale || 1
+  var separation = 24 * renderScale * predatorScale
   var distance = Math.hypot(enemySnake.head.x - contactX, enemySnake.head.y - contactY)
-  var pushDistance = Math.max(5 * renderScale, separation - distance)
+  var pushDistance = Math.max(5 * renderScale * predatorScale, separation - distance)
   var reflectedHeading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
 
   moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
@@ -210,23 +241,43 @@ function bounceBadSnakeOffPlayer(enemySnake, contactX, contactY) {
 }
 
 function getSnakeTrapLoops() {
+  var now = Date.now()
+  if (now < nextSnakeTrapScanAt) return cachedSnakeTrapLoops
+
   var snakePoints = [{ x: snakeHead.x, y: snakeHead.y }]
-  var minimumPointSeparation = Math.max(8, Math.ceil(70 * renderScale / segLength))
-  var closureDistance = 27 * renderScale
+  var pointStride = Math.max(1, Math.ceil(x.length / snakeTrapMaxPoints))
+  var minimumPointSeparation = Math.max(4, Math.ceil(8 / pointStride))
+  var closureDistance = 27 * renderScale * getPlayerSizeScale()
   var closureDistanceSquared = closureDistance * closureDistance
   var minimumCandidateArea = 520 * renderScale * renderScale
   var bucketSize = closureDistance
   var pointBuckets = {}
   var trapLoops = []
+  var crossPrefix = [0]
 
-  for (var bodyIndex = 0; bodyIndex < x.length; bodyIndex++) {
+  for (var bodyIndex = 0; bodyIndex < x.length; bodyIndex += pointStride) {
     snakePoints.push({ x: x[bodyIndex], y: y[bodyIndex] })
+  }
+
+  var lastBodyIndex = x.length - 1
+  var lastSample = snakePoints[snakePoints.length - 1]
+  if (lastBodyIndex >= 0 && (lastSample.x !== x[lastBodyIndex] || lastSample.y !== y[lastBodyIndex])) {
+    snakePoints.push({ x: x[lastBodyIndex], y: y[lastBodyIndex] })
+  }
+
+  for (var prefixIndex = 1; prefixIndex < snakePoints.length; prefixIndex++) {
+    var prefixPrevious = snakePoints[prefixIndex - 1]
+    var prefixCurrent = snakePoints[prefixIndex]
+    crossPrefix[prefixIndex] = crossPrefix[prefixIndex - 1] +
+      prefixPrevious.x * prefixCurrent.y - prefixCurrent.x * prefixPrevious.y
   }
 
   for (var endIndex = 0; endIndex < snakePoints.length; endIndex++) {
     var endPoint = snakePoints[endIndex]
     var bucketX = Math.floor(endPoint.x / bucketSize)
     var bucketY = Math.floor(endPoint.y / bucketSize)
+    var bestStartIndex = -1
+    var bestLoopArea = Infinity
 
     for (var offsetX = -1; offsetX <= 1; offsetX++) {
       for (var offsetY = -1; offsetY <= 1; offsetY++) {
@@ -241,13 +292,24 @@ function getSnakeTrapLoops() {
           var closureDy = endPoint.y - startPoint.y
           if (closureDx * closureDx + closureDy * closureDy > closureDistanceSquared) continue
 
-          var trapPolygon = snakePoints.slice(startIndex, endIndex + 1)
-          var loopArea = Math.abs(getPolygonArea(trapPolygon))
+          var openChainArea = crossPrefix[endIndex] - crossPrefix[startIndex]
+          var closingEdgeArea = endPoint.x * startPoint.y - startPoint.x * endPoint.y
+          var loopArea = Math.abs((openChainArea + closingEdgeArea) / 2)
           if (loopArea < minimumCandidateArea) continue
 
-          trapLoops.push(createTrapLoop(trapPolygon, loopArea))
+          if (loopArea < bestLoopArea) {
+            bestStartIndex = startIndex
+            bestLoopArea = loopArea
+          }
         }
       }
+    }
+
+    if (bestStartIndex >= 0) {
+      addLimitedTrapLoop(
+        trapLoops,
+        createTrapLoop(snakePoints.slice(bestStartIndex, endIndex + 1), bestLoopArea)
+      )
     }
 
     var bucketKey = bucketX + ':' + bucketY
@@ -255,7 +317,25 @@ function getSnakeTrapLoops() {
     pointBuckets[bucketKey].push(endIndex)
   }
 
-  return trapLoops
+  cachedSnakeTrapLoops = trapLoops
+  nextSnakeTrapScanAt = now + snakeTrapScanInterval
+  return cachedSnakeTrapLoops
+}
+
+function addLimitedTrapLoop(trapLoops, trapLoop) {
+  if (trapLoops.length < maxSnakeTrapLoops) {
+    trapLoops.push(trapLoop)
+    return
+  }
+
+  var largestLoopIndex = 0
+  for (var i = 1; i < trapLoops.length; i++) {
+    if (trapLoops[i].area > trapLoops[largestLoopIndex].area) largestLoopIndex = i
+  }
+
+  if (trapLoop.area < trapLoops[largestLoopIndex].area) {
+    trapLoops[largestLoopIndex] = trapLoop
+  }
 }
 
 function createTrapLoop(polygon, area) {

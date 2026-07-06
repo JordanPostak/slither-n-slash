@@ -2,6 +2,7 @@
 
 function spawnBadSnakes() {
   badSnakes = []
+  nextTreeSnakeSpawnAt = 0
 
   for (var i = 0; i < badSnakeStartCount; i++) {
     spawnBadSnake()
@@ -9,55 +10,125 @@ function spawnBadSnakes() {
 }
 
 function spawnBadSnake() {
-  if (badSnakes.length >= badSnakeMaxCount) return
+  if (countBadSnakesBySpecies('centipede') >= badSnakeMaxCount) return
 
-  badSnakes.push(createBadSnake(badSnakes.length))
+  badSnakes.push(createBadSnake())
 }
 
-function createBadSnake(index) {
-  var margin = 54 * renderScale
-  var side = index % 4
-  var headX
-  var headY
-
-  if (side === 0) {
-    headX = margin
-    headY = margin
-  } else if (side === 1) {
-    headX = canvas.width - margin
-    headY = canvas.height - margin
-  } else if (side === 2) {
-    headX = canvas.width - margin
-    headY = margin
-  } else {
-    headX = margin
-    headY = canvas.height - margin
-  }
-
-  var heading = Math.atan2(canvas.height / 2 - headY, canvas.width / 2 - headX)
+function createBadSnake() {
+  var spawn = getRandomPredatorEntry()
+  var headX = spawn.x
+  var headY = spawn.y
+  var heading = spawn.heading
   var enemySnake = {
+    species: 'centipede',
     head: { x: headX, y: headY },
     heading: heading,
     segments: [],
     wanderAngle: heading,
     nextWanderAt: 0,
     cutCooldownUntil: 0,
-    palette: index % 2 === 0
-      ? { head: '#431b1f', body: '#7a2d32', stripe: '#ffb657' }
-      : { head: '#2a2438', body: '#5a375d', stripe: '#b6ff70' },
+    collisionScale: 1,
+    segmentSpacingScale: 1,
+    palette: { head: '#431b1f', body: '#7a2d32', stripe: '#ffb657' },
   }
 
-  for (var i = 0; i < badSnakeStartSegments; i++) {
-    enemySnake.segments.push({
-      x: headX - Math.cos(heading) * segLength * (i + 1),
-      y: headY - Math.sin(heading) * segLength * (i + 1),
-    })
-  }
-
+  var startingEnemySegments = badSnakeStartSegments + getProgressiveCentipedeLengthBonus()
+  addInitialPredatorSegments(enemySnake, startingEnemySegments)
   return enemySnake
 }
 
+function createTreeSnake() {
+  var spawn = getRandomPredatorEntry()
+  var enemySnake = {
+    species: 'tree-snake',
+    head: { x: spawn.x, y: spawn.y },
+    heading: spawn.heading,
+    segments: [],
+    wanderAngle: spawn.heading,
+    nextWanderAt: 0,
+    cutCooldownUntil: 0,
+    collisionScale: treeSnakeFixedScale,
+    segmentSpacingScale: treeSnakeSegmentSpacingScale,
+  }
+  var extraLength = Math.max(0, n - treeSnakeUnlockLength)
+  var lengthBonus = Math.floor(Math.log1p(extraLength) * 0.65)
+
+  addInitialPredatorSegments(enemySnake, treeSnakeStartSegments + lengthBonus)
+  return enemySnake
+}
+
+function getRandomPredatorEntry() {
+  var edgePadding = Math.min(
+    Math.min(canvas.width, canvas.height) * 0.35,
+    Math.max(54 * renderScale, arenaCornerRadius)
+  )
+  var side = Math.floor(Math.random() * 4)
+  var horizontalRange = Math.max(0, canvas.width - edgePadding * 2)
+  var verticalRange = Math.max(0, canvas.height - edgePadding * 2)
+  var headX
+  var headY
+
+  if (side === 0) {
+    headX = 0
+    headY = edgePadding + Math.random() * verticalRange
+  } else if (side === 1) {
+    headX = canvas.width
+    headY = edgePadding + Math.random() * verticalRange
+  } else if (side === 2) {
+    headX = edgePadding + Math.random() * horizontalRange
+    headY = 0
+  } else {
+    headX = edgePadding + Math.random() * horizontalRange
+    headY = canvas.height
+  }
+
+  var entryTargetX = canvas.width * (0.3 + Math.random() * 0.4)
+  var entryTargetY = canvas.height * (0.3 + Math.random() * 0.4)
+  return {
+    x: headX,
+    y: headY,
+    heading: Math.atan2(entryTargetY - headY, entryTargetX - headX),
+  }
+}
+
+function addInitialPredatorSegments(enemySnake, count) {
+  var spacing = segLength * (enemySnake.segmentSpacingScale || 1)
+
+  for (var i = 0; i < count; i++) {
+    enemySnake.segments.push({
+      x: enemySnake.head.x - Math.cos(enemySnake.heading) * spacing * (i + 1),
+      y: enemySnake.head.y - Math.sin(enemySnake.heading) * spacing * (i + 1),
+    })
+  }
+}
+
+function countBadSnakesBySpecies(species) {
+  var count = 0
+
+  for (var i = 0; i < badSnakes.length; i++) {
+    if (badSnakes[i].species === species) count++
+  }
+
+  return count
+}
+
+function ensureTreeSnakePredator() {
+  if (n < treeSnakeUnlockLength) return
+  if (countBadSnakesBySpecies('tree-snake') >= treeSnakeMaxCount) return
+  if (Date.now() < nextTreeSnakeSpawnAt) return
+
+  badSnakes.push(createTreeSnake())
+}
+
+function getProgressiveCentipedeLengthBonus() {
+  var extraPlayerSegments = Math.max(0, n - startingSegments)
+  return Math.floor(Math.log1p(extraPlayerSegments) * 0.72)
+}
+
 function updateBadSnakes(snakeTrapLoops) {
+  ensureTreeSnakePredator()
+
   for (var i = 0; i < badSnakes.length; i++) {
     var enemySnake = badSnakes[i]
 
@@ -178,11 +249,33 @@ function getBadSnakeTarget(enemySnake) {
   var dyToPlayer = playerTarget.y - enemySnake.head.y
   var playerDistanceSquared = dxToPlayer * dxToPlayer + dyToPlayer * dyToPlayer
 
+  if (!isPlayerNearBadSnake(enemySnake)) {
+    return closestFood
+  }
+
   if (!closestFood || playerDistanceSquared < closestDistanceSquared) {
     return playerTarget
   }
 
   return closestFood
+}
+
+function isPlayerNearBadSnake(enemySnake) {
+  var aggroDistance = badSnakePlayerAggroDistance * renderScale
+  var aggroDistanceSquared = aggroDistance * aggroDistance
+  var headDx = snakeHead.x - enemySnake.head.x
+  var headDy = snakeHead.y - enemySnake.head.y
+
+  if (headDx * headDx + headDy * headDy <= aggroDistanceSquared) return true
+
+  for (var bodyIndex = 0; bodyIndex < x.length; bodyIndex += 2) {
+    var bodyDx = x[bodyIndex] - enemySnake.head.x
+    var bodyDy = y[bodyIndex] - enemySnake.head.y
+
+    if (bodyDx * bodyDx + bodyDy * bodyDy <= aggroDistanceSquared) return true
+  }
+
+  return false
 }
 
 function getPlayerSideAttackTarget(enemySnake) {
@@ -213,7 +306,7 @@ function getPlayerSideAttackTarget(enemySnake) {
 function dragBadSnakeSegments(enemySnake) {
   var leadX = enemySnake.head.x
   var leadY = enemySnake.head.y
-  var enemySegLength = segLength * 0.94
+  var enemySegLength = segLength * 0.94 * (enemySnake.segmentSpacingScale || 1)
 
   for (var i = 0; i < enemySnake.segments.length; i++) {
     var segment = enemySnake.segments[i]
@@ -253,6 +346,7 @@ function growBadSnake(enemySnake, count) {
 
 function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   var now = Date.now()
+  var headCollisionScale = Math.max(getPlayerSizeScale(), enemySnake.collisionScale || 1)
   var enclosingTrapLoop = getBadSnakeTrapLoop(enemySnake, snakeTrapLoops)
   var centipedeIsTrapped = Boolean(enclosingTrapLoop)
   enemySnake.isTrapped = centipedeIsTrapped
@@ -266,7 +360,7 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     var recoveryPlayerHitIndex = getPlayerBodyHitIndex(
       enemySnake.head.x,
       enemySnake.head.y,
-      15 * renderScale
+      15 * renderScale * headCollisionScale
     )
     var recoveryEnemyHitIndex = getEnemyBodyHitIndex(
       enemySnake,
@@ -279,7 +373,7 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
       snakeHead.y,
       enemySnake.head.x,
       enemySnake.head.y,
-      18 * renderScale
+      18 * renderScale * headCollisionScale
     )
 
     if (recoveryPlayerHitIndex >= 0 || recoveryEnemyHitIndex >= 0 || recoveryHeadHit) {
@@ -293,10 +387,10 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   }
 
   if (isBerserkerActive() && !centipedeIsTrapped) {
-    var centipedeHitPlayer = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale) >= 0
+    var centipedeHitPlayer = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 13 * renderScale * headCollisionScale) >= 0
     var playerHitCentipede = (
       getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 17 * renderScale) >= 0 ||
-      arePointsTouching(snakeHead.x, snakeHead.y, enemySnake.head.x, enemySnake.head.y, 17 * renderScale)
+      arePointsTouching(snakeHead.x, snakeHead.y, enemySnake.head.x, enemySnake.head.y, 17 * renderScale * headCollisionScale)
     )
 
     if (centipedeHitPlayer || playerHitCentipede) {
@@ -305,14 +399,14 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     return
   }
 
-  var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 15 * renderScale)
+  var playerHitIndex = getPlayerBodyHitIndex(enemySnake.head.x, enemySnake.head.y, 15 * renderScale * headCollisionScale)
   var enemyHitIndex = getEnemyBodyHitIndex(enemySnake, snakeHead.x, snakeHead.y, 17 * renderScale)
   var headsColliding = arePointsTouching(
     snakeHead.x,
     snakeHead.y,
     enemySnake.head.x,
     enemySnake.head.y,
-    18 * renderScale
+    18 * renderScale * headCollisionScale
   )
   if (centipedeIsTrapped) {
     if (playerHitIndex >= 0) {
@@ -341,13 +435,25 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     return
   }
 
+  if (enemySnake.species === 'centipede' && n >= playerBiteUpgradeLength) {
+    handleDominantPlayerCentipedeContact(
+      enemySnake,
+      playerHitIndex,
+      enemyHitIndex,
+      headsColliding,
+      now
+    )
+    return
+  }
+
   if (now < enemySnake.cutCooldownUntil) {
     if (playerHitIndex >= 0) {
       bounceBadSnakeOffPlayer(enemySnake, x[playerHitIndex], y[playerHitIndex])
     } else if (enemyHitIndex >= 0) {
       bouncePlayerOffBadSnake(
         enemySnake.segments[enemyHitIndex].x,
-        enemySnake.segments[enemyHitIndex].y
+        enemySnake.segments[enemyHitIndex].y,
+        enemySnake.collisionScale
       )
     } else if (headsColliding) {
       bounceSnakeHeadsApart(enemySnake)
@@ -372,11 +478,11 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   if (enemyHitIndex >= 0) {
     var enemyContactX = enemySnake.segments[enemyHitIndex].x
     var enemyContactY = enemySnake.segments[enemyHitIndex].y
-    var recoveredSegments = removeBadSnakeSegments(enemySnake, snakeBiteSegments)
+    var recoveredSegments = removeBadSnakeSegments(enemySnake, getPlayerBiteSegments())
     addPlayerSegments(recoveredSegments)
 
     if (badSnakes.indexOf(enemySnake) !== -1) {
-      bouncePlayerOffBadSnake(enemyContactX, enemyContactY)
+      bouncePlayerOffBadSnake(enemyContactX, enemyContactY, enemySnake.collisionScale)
       enemySnake.cutCooldownUntil = now + snakeCutCooldown
     }
 
@@ -386,5 +492,43 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
 
   if (headsColliding) {
     bounceSnakeHeadsApart(enemySnake)
+  }
+}
+
+function handleDominantPlayerCentipedeContact(enemySnake, playerHitIndex, enemyHitIndex, headsColliding, now) {
+  if (enemyHitIndex >= 0 || headsColliding) {
+    var enemyContact = enemyHitIndex >= 0
+      ? enemySnake.segments[enemyHitIndex]
+      : enemySnake.head
+
+    pushBadSnakeAwayFromDominantPlayer(
+      enemySnake,
+      snakeHead.x,
+      snakeHead.y,
+      enemyContact.x,
+      enemyContact.y
+    )
+
+    if (now >= enemySnake.cutCooldownUntil) {
+      var eatenSegments = removeBadSnakeSegments(enemySnake, getPlayerBiteSegments())
+      addPlayerSegments(eatenSegments)
+
+      if (badSnakes.indexOf(enemySnake) !== -1) {
+        enemySnake.cutCooldownUntil = now + snakeCutCooldown
+      }
+
+      if (eatenSegments) playGameSound('eat')
+    }
+    return
+  }
+
+  if (playerHitIndex >= 0) {
+    pushBadSnakeAwayFromDominantPlayer(
+      enemySnake,
+      x[playerHitIndex],
+      y[playerHitIndex],
+      enemySnake.head.x,
+      enemySnake.head.y
+    )
   }
 }

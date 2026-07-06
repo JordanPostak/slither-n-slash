@@ -1,6 +1,11 @@
-// Centipede bodies, transformation indicators, legs, and flame effects.
+// Centipede bodies, progressive orange transformation, legs, and flame effects.
 
 function drawBadSnake(enemySnake) {
+  if (enemySnake.species === 'tree-snake') {
+    drawTreeSnakePredator(enemySnake)
+    return
+  }
+
   drawBadCentipedeSegment(enemySnake.head.x, enemySnake.head.y, enemySnake.heading, true, enemySnake.palette, 0, enemySnake.isBurning, enemySnake.crushProgress)
 
   for (var i = 0; i < enemySnake.segments.length; i++) {
@@ -10,83 +15,6 @@ function drawBadSnake(enemySnake) {
     drawBadCentipedeSegment(segment.x, segment.y, angle, false, enemySnake.palette, i + 1, enemySnake.isBurning, enemySnake.crushProgress)
   }
 
-  if (enemySnake.crushProgress > 0 && !enemySnake.isBurning) {
-    drawBadSnakeCrushTransformation(enemySnake)
-  }
-
-  if (enemySnake.isTrapped && !enemySnake.isBurning) {
-    drawTrappedCentipedeIndicator(enemySnake)
-  }
-}
-
-function drawBadSnakeCrushTransformation(enemySnake) {
-  var points = [enemySnake.head].concat(enemySnake.segments)
-  var progress = enemySnake.crushProgress || 0
-
-  for (var i = 0; i < points.length; i++) {
-    var stagger = points.length > 1 ? i / (points.length - 1) * 0.35 : 0
-    var orbProgress = Math.max(0, Math.min(1, (progress - stagger) / 0.65))
-    if (orbProgress <= 0) continue
-
-    var point = points[i]
-    var pulse = 1 + Math.sin(Date.now() * 0.018 + i) * 0.08 * orbProgress
-    var radius = (i === 0 ? 10 : 8) * renderScale * pulse
-
-    ctx.save()
-    ctx.globalAlpha = orbProgress
-    ctx.fillStyle = 'rgba(255, 116, 25, 0.24)'
-    ctx.beginPath()
-    ctx.arc(point.x, point.y, radius * 1.65, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = '#ff8128'
-    ctx.beginPath()
-    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = '#ffd071'
-    ctx.beginPath()
-    ctx.arc(
-      point.x - radius * 0.25,
-      point.y - radius * 0.25,
-      radius * 0.32,
-      0,
-      Math.PI * 2
-    )
-    ctx.fill()
-    ctx.restore()
-  }
-}
-
-function drawTrappedCentipedeIndicator(enemySnake) {
-  var pulse = 0.82 + Math.sin(Date.now() * 0.012) * 0.18
-  var crushProgress = enemySnake.crushProgress || 0
-
-  ctx.save()
-  ctx.translate(enemySnake.head.x, enemySnake.head.y)
-  ctx.strokeStyle = 'rgba(115, 226, 255, ' + pulse + ')'
-  ctx.lineWidth = 2 * renderScale
-  ctx.setLineDash([4 * renderScale, 3 * renderScale])
-  ctx.beginPath()
-  ctx.arc(0, 0, 18 * renderScale, 0, Math.PI * 2)
-  ctx.stroke()
-  if (crushProgress > 0) {
-    ctx.setLineDash([])
-    ctx.strokeStyle = '#ff9a3d'
-    ctx.lineWidth = 3 * renderScale
-    ctx.beginPath()
-    ctx.arc(0, 0, 21 * renderScale, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * crushProgress)
-    ctx.stroke()
-  }
-  ctx.setLineDash([])
-  var statusText = crushProgress > 0 ? 'CRUSHING' : 'TRAPPED'
-  ctx.fillStyle = crushProgress > 0 ? '#ffd29a' : '#dff8ff'
-  ctx.strokeStyle = 'rgba(5, 18, 25, 0.92)'
-  ctx.lineWidth = 2.5 * renderScale
-  ctx.font = '800 ' + 8 * renderScale + 'px Arial, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
-  ctx.strokeText(statusText, 0, -20 * renderScale)
-  ctx.fillText(statusText, 0, -20 * renderScale)
-  ctx.restore()
 }
 
 function drawBadCentipedeSegment(posX, posY, angle, isHead, palette, segmentIndex, isBurning, crushProgress) {
@@ -160,6 +88,16 @@ function drawBadCentipedeSegment(posX, posY, angle, isHead, palette, segmentInde
     ctx.moveTo(10, 4)
     ctx.lineTo(15, 8)
     ctx.stroke()
+  }
+
+  if (crushProgress > 0 && !isBurning) {
+    ctx.save()
+    ctx.globalAlpha = crushProgress * 0.88
+    ctx.fillStyle = '#f47c20'
+    ctx.beginPath()
+    ctx.ellipse(0, 0, isHead ? 13 : 10.5, isHead ? 8.5 : 7.5, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
 
   if (isBurning) {

@@ -5,6 +5,15 @@ function handlePrimaryGameToggle() {
     enterGameMode(false)
   }
 
+  requestGamePlayback()
+}
+
+function requestGamePlayback() {
+  if (!playing && !controlsReady) {
+    showSnakeSelection()
+    return
+  }
+
   toggleGamePlayback()
 }
 
@@ -24,7 +33,7 @@ function enterGameMode(shouldStart) {
   })
 
   if (shouldStart && !playing) {
-    toggleGamePlayback()
+    requestGamePlayback()
   }
 }
 
@@ -34,6 +43,8 @@ function exitGameMode() {
   if (playing) {
     toggleGamePlayback()
   }
+
+  hideSnakeSelection()
 
   if (document.fullscreenElement) {
     document.exitFullscreen().catch(function () {})
@@ -88,6 +99,7 @@ function setupSiteControls() {
   copyrightYear.textContent = new Date().getFullYear()
   setupSectionNavigation()
   setupAdjustableMobileControls()
+  setupSnakeSkinSelection()
 
   navToggle.addEventListener('click', function () {
     var isOpen = siteNavigation.classList.toggle('is-open')
@@ -153,6 +165,74 @@ function setupSiteControls() {
 
     exitGameMode()
   })
+}
+
+function setupSnakeSkinSelection() {
+  var selectionScreen = document.getElementById('snake-select-screen')
+  var skinOptions = Array.from(document.querySelectorAll('[data-snake-skin]'))
+  var startButton = document.getElementById('snake-select-start')
+  var cancelButton = document.getElementById('snake-select-cancel')
+
+  if (!selectionScreen || !startButton || !cancelButton) return
+
+  function selectSkin(skinNumber) {
+    selectedSnakeSkin = Number(skinNumber) || 1
+
+    for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
+      var option = skinOptions[optionIndex]
+      var isSelected = Number(option.dataset.snakeSkin) === selectedSnakeSkin
+      option.classList.toggle('is-selected', isSelected)
+      option.setAttribute('aria-checked', String(isSelected))
+    }
+  }
+
+  for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
+    skinOptions[optionIndex].addEventListener('click', function (event) {
+      selectSkin(event.currentTarget.dataset.snakeSkin)
+    })
+  }
+
+  startButton.addEventListener('click', function () {
+    startButton.disabled = true
+    startButton.textContent = 'Loading...'
+
+    loadPlayerSnakeSkin(selectedSnakeSkin).then(function () {
+      var shouldStartGame = document.body.classList.contains('is-snake-selecting')
+      hideSnakeSelection()
+      startButton.disabled = false
+      startButton.textContent = 'Start Run'
+      if (shouldStartGame) toggleGamePlayback()
+    })
+  })
+
+  cancelButton.addEventListener('click', function () {
+    exitGameMode()
+  })
+
+  selectSkin(selectedSnakeSkin)
+}
+
+function showSnakeSelection() {
+  var selectionScreen = document.getElementById('snake-select-screen')
+  if (!selectionScreen) return
+
+  var skinOptions = document.querySelectorAll('[data-snake-skin]')
+  for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
+    var isSelected = Number(skinOptions[optionIndex].dataset.snakeSkin) === selectedSnakeSkin
+    skinOptions[optionIndex].classList.toggle('is-selected', isSelected)
+    skinOptions[optionIndex].setAttribute('aria-checked', String(isSelected))
+  }
+
+  selectionScreen.hidden = false
+  document.body.classList.add('is-snake-selecting')
+  var selectedOption = selectionScreen.querySelector('.snake-skin-option.is-selected')
+  if (selectedOption) selectedOption.focus()
+}
+
+function hideSnakeSelection() {
+  var selectionScreen = document.getElementById('snake-select-screen')
+  if (selectionScreen) selectionScreen.hidden = true
+  document.body.classList.remove('is-snake-selecting')
 }
 
 function setupSectionNavigation() {

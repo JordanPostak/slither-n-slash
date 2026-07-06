@@ -2,14 +2,18 @@
 
 function setupHeroSnakePreview() {
   wormHeadImage.addEventListener('load', drawHeroSnakePreview)
-  wormBodyImage.addEventListener('load', drawHeroSnakePreview)
+  wormTailImage.addEventListener('load', drawHeroSnakePreview)
+
+  for (var i = 0; i < wormBodyImages.length; i++) {
+    wormBodyImages[i].addEventListener('load', drawHeroSnakePreview)
+  }
+
   drawHeroSnakePreview()
 }
 
 function drawHeroSnakePreview() {
   var heroCanvas = document.getElementById('hero-snake-canvas')
-  if (!heroCanvas || !wormHeadImage.complete || !wormBodyImage.complete) return
-  if (!wormHeadImage.naturalWidth || !wormBodyImage.naturalWidth) return
+  if (!heroCanvas || !areSnakePreviewImagesReady()) return
 
   var rect = heroCanvas.getBoundingClientRect()
   if (!rect.width || !rect.height) return
@@ -24,22 +28,39 @@ function drawHeroSnakePreview() {
   heroContext.imageSmoothingEnabled = true
   heroContext.imageSmoothingQuality = 'high'
 
-  var points = getHeroSnakePreviewPoints(rect.width, rect.height, 8)
+  var points = getHeroSnakePreviewPoints(rect.width, rect.height, 6)
   var previewScale = Math.min(rect.width, rect.height) / 215
-
-  drawHeroSnakePreviewTail(heroContext, points[0], points[1], previewScale)
-
-  for (var i = 1; i < points.length - 1; i++) {
-    var nextPoint = points[i + 1]
-    var previousPoint = points[Math.max(0, i - 1)]
-    var bodyAngle = Math.atan2(nextPoint.y - previousPoint.y, nextPoint.x - previousPoint.x)
-    drawHeroSnakePreviewSegment(heroContext, wormBodyImage, points[i], bodyAngle, 24, 34, previewScale)
-  }
 
   var headPoint = points[points.length - 1]
   var beforeHead = points[points.length - 2]
   var headAngle = Math.atan2(headPoint.y - beforeHead.y, headPoint.x - beforeHead.x)
-  drawHeroSnakePreviewSegment(heroContext, wormHeadImage, headPoint, headAngle, 28, 46, previewScale, true)
+  var renderedHeadPoint = {
+    x: headPoint.x + Math.cos(headAngle) * 14 * previewScale,
+    y: headPoint.y + Math.sin(headAngle) * 14 * previewScale,
+  }
+  drawHeroSnakePreviewSegment(heroContext, wormHeadImage, renderedHeadPoint, headAngle, 44, 24, previewScale)
+
+  for (var i = points.length - 2; i >= 0; i--) {
+    var nextPoint = points[Math.min(points.length - 1, i + 1)]
+    var previousPoint = points[Math.max(0, i - 1)]
+    var bodyAngle = Math.atan2(nextPoint.y - previousPoint.y, nextPoint.x - previousPoint.x)
+    var bodySequenceIndex = points.length - 2 - i
+    var bodyImage = wormBodyImages[bodySequenceIndex % wormBodyImages.length]
+    drawHeroSnakePreviewSegment(heroContext, bodyImage, points[i], bodyAngle, 30, 18, previewScale)
+  }
+
+  drawHeroSnakePreviewTail(heroContext, points[0], points[1], previewScale)
+}
+
+function areSnakePreviewImagesReady() {
+  if (!wormHeadImage.complete || !wormHeadImage.naturalWidth) return false
+  if (!wormTailImage.complete || !wormTailImage.naturalWidth) return false
+
+  for (var i = 0; i < wormBodyImages.length; i++) {
+    if (!wormBodyImages[i].complete || !wormBodyImages[i].naturalWidth) return false
+  }
+
+  return true
 }
 
 function getHeroSnakePreviewPoints(width, height, pointCount) {
@@ -93,47 +114,31 @@ function getHeroSnakePreviewCurvePoint(width, height, progress) {
   }
 }
 
-function drawHeroSnakePreviewSegment(heroContext, image, point, angle, width, height, scale, drawFace) {
+function drawHeroSnakePreviewSegment(heroContext, image, point, angle, width, height, scale) {
   heroContext.save()
   heroContext.translate(point.x, point.y)
-  heroContext.rotate(angle + Math.PI / 2)
+  heroContext.rotate(angle + Math.PI)
   heroContext.drawImage(image, -width * scale / 2, -height * scale / 2, width * scale, height * scale)
-
-  if (drawFace) {
-    drawSnakeFaceOnContext(heroContext, width * scale, height * scale, scale, true)
-  }
 
   heroContext.restore()
 }
 
 function drawHeroSnakePreviewTail(heroContext, tailPoint, nextPoint, scale) {
   var tailAngle = Math.atan2(tailPoint.y - nextPoint.y, tailPoint.x - nextPoint.x)
-  var tailX = tailPoint.x + Math.cos(tailAngle) * 5 * scale
-  var tailY = tailPoint.y + Math.sin(tailAngle) * 5 * scale
+  var tailX = tailPoint.x + Math.cos(tailAngle) * 24 * scale
+  var tailY = tailPoint.y + Math.sin(tailAngle) * 24 * scale
+  var tailWidth = 52 * scale
+  var tailHeight = 18 * scale
 
   heroContext.save()
   heroContext.translate(tailX, tailY)
   heroContext.rotate(tailAngle)
-  heroContext.scale(scale, scale)
-  heroContext.beginPath()
-  heroContext.moveTo(-12, -11)
-  heroContext.quadraticCurveTo(3, -8, 16, 0)
-  heroContext.quadraticCurveTo(3, 8, -12, 11)
-  heroContext.quadraticCurveTo(-7, 4, -7, -4)
-  heroContext.closePath()
-  heroContext.save()
-  heroContext.clip()
-  heroContext.rotate(Math.PI / 2)
-  heroContext.drawImage(wormBodyImage, -17, -13, 34, 26)
-  heroContext.restore()
-  heroContext.strokeStyle = '#7c5f12'
-  heroContext.lineWidth = 1.2
-  heroContext.stroke()
-  heroContext.strokeStyle = '#14110a'
-  heroContext.lineWidth = 2.2
-  heroContext.beginPath()
-  heroContext.moveTo(-9, 0)
-  heroContext.quadraticCurveTo(2, -1.6, 12, 0)
-  heroContext.stroke()
+  heroContext.drawImage(
+    wormTailImage,
+    -tailWidth / 2,
+    -tailHeight / 2,
+    tailWidth,
+    tailHeight
+  )
   heroContext.restore()
 }

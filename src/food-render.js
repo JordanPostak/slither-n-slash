@@ -1,6 +1,13 @@
 // Food, prey, poison beetle, protection, and orange-reward rendering.
 
 function drawFood(food) {
+  var foodSizeScale = food.sizeScale || 1
+
+  ctx.save()
+  ctx.translate(food.x, food.y)
+  ctx.scale(foodSizeScale, foodSizeScale)
+  ctx.translate(-food.x, -food.y)
+
   if (food.type === 'centipede-orb') {
     drawCentipedeOrb(food)
   } else if (food.isBad) {
@@ -18,6 +25,8 @@ function drawFood(food) {
   if (isPoisonBeetleSpawnProtected(food)) {
     drawPoisonBeetleSpawnProtection(food)
   }
+
+  ctx.restore()
 }
 
 function isPoisonBeetleSpawnProtected(food) {
@@ -41,31 +50,25 @@ function drawPoisonBeetleSpawnProtection(food) {
 
 function drawFoodCrushTransformation(food) {
   var progress = food.crushProgress || 0
-  var pulse = 1 + Math.sin(Date.now() * 0.018) * 0.08 * progress
-  var radius = 8 * renderScale * pulse
+  var centerX = food.x + 6 * renderScale
+  var centerY = food.y + 5 * renderScale
+  var radiusX = food.type === 'mouse' ? 16 : food.type === 'grub' ? 12 : 13
+  var radiusY = food.type === 'mouse' ? 9 : food.type === 'grub' ? 6 : 9
 
   ctx.save()
-  ctx.globalAlpha = progress
-  ctx.fillStyle = 'rgba(255, 116, 25, 0.24)'
+  ctx.globalAlpha = progress * 0.9
+  ctx.fillStyle = '#f47c20'
   ctx.beginPath()
-  ctx.arc(food.x, food.y, radius * 1.7, 0, Math.PI * 2)
+  ctx.ellipse(
+    centerX,
+    centerY,
+    radiusX * renderScale,
+    radiusY * renderScale,
+    food.facingAngle || 0,
+    0,
+    Math.PI * 2
+  )
   ctx.fill()
-  ctx.fillStyle = '#ff8128'
-  ctx.beginPath()
-  ctx.arc(food.x, food.y, radius, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#ffd071'
-  ctx.beginPath()
-  ctx.arc(food.x - radius * 0.25, food.y - radius * 0.25, radius * 0.32, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-
-  ctx.save()
-  ctx.strokeStyle = 'rgba(255, 154, 61, 0.9)'
-  ctx.lineWidth = 2 * renderScale
-  ctx.beginPath()
-  ctx.arc(food.x, food.y, 14 * renderScale, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress)
-  ctx.stroke()
   ctx.restore()
 }
 
@@ -96,7 +99,12 @@ function drawCentipedeOrb(orb) {
 
 function drawGoldenMouse(mouse) {
   var pulse = 0.72 + Math.sin(Date.now() * 0.012) * 0.18
+  var mouseSizeScale = mouse.sizeScale || 1
 
+  ctx.save()
+  ctx.translate(mouse.x, mouse.y)
+  ctx.scale(mouseSizeScale, mouseSizeScale)
+  ctx.translate(-mouse.x, -mouse.y)
   ctx.save()
   ctx.fillStyle = 'rgba(255, 208, 62, ' + pulse * 0.26 + ')'
   ctx.shadowColor = '#ffd43b'
@@ -113,6 +121,7 @@ function drawGoldenMouse(mouse) {
     isEntityMoving(mouse),
     true
   )
+  ctx.restore()
 }
 
 function getFoodExpiresAt(foodType, now) {
@@ -195,6 +204,7 @@ function sendEntityToNearestExit(entity) {
 function isSnakeTouchingEntity(entity, radius) {
   var dx = snakeHead.x - entity.x
   var dy = snakeHead.y - entity.y
+  radius += 10 * renderScale * (getPlayerSizeScale() - 1)
   return dx * dx + dy * dy < radius * radius
 }
 

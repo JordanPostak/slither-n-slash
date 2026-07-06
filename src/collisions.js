@@ -28,7 +28,7 @@ function applyEntityBounces() {
   if (goldenMouse && !goldenMouse.enteringArena) {
     bounceEntities.push({
       entity: goldenMouse,
-      radius: 16 * renderScale,
+      radius: 16 * renderScale * (goldenMouse.sizeScale || 1),
     })
   }
 
@@ -51,11 +51,13 @@ function canEntityBounce(entity) {
 }
 
 function getEntityBounceRadius(entity) {
-  if (entity.type === 'centipede-orb') return 7 * renderScale
-  if (entity.type === 'grub') return 14 * renderScale
-  if (entity.type === 'mouse') return 16 * renderScale
-  if (entity.isBad) return 14 * renderScale
-  return 14 * renderScale
+  var entitySizeScale = entity.sizeScale || 1
+
+  if (entity.type === 'centipede-orb') return 7 * renderScale * entitySizeScale
+  if (entity.type === 'grub') return 14 * renderScale * entitySizeScale
+  if (entity.type === 'mouse') return 16 * renderScale * entitySizeScale
+  if (entity.isBad) return 14 * renderScale * entitySizeScale
+  return 14 * renderScale * entitySizeScale
 }
 
 function applyBounceBetweenEntities(firstEntity, secondEntity, firstRadius, secondRadius) {
@@ -119,7 +121,7 @@ function applyFoodCentipedeBounces() {
 function applyFoodCentipedeBounce(food, enemySnake) {
   var collisionPoints = getBadSnakeCollisionPoints(enemySnake)
   var foodRadius = getEntityBounceRadius(food)
-  var centipedeRadius = 9 * renderScale
+  var centipedeRadius = 9 * renderScale * (enemySnake.collisionScale || 1)
   var minDistance = foodRadius + centipedeRadius
   var minDistanceSquared = minDistance * minDistance
   var closestHit
@@ -174,6 +176,15 @@ function applyBadSnakeBounces() {
       if (secondSnake.isBurning) continue
 
       applyBadSnakeBounce(firstSnake, secondSnake)
+
+      if (badSnakes.indexOf(firstSnake) === -1) {
+        firstIndex--
+        break
+      }
+
+      if (badSnakes.indexOf(secondSnake) === -1) {
+        secondIndex--
+      }
     }
   }
 }
@@ -181,7 +192,10 @@ function applyBadSnakeBounces() {
 function applyBadSnakeBounce(firstSnake, secondSnake) {
   var firstPoints = getBadSnakeCollisionPoints(firstSnake)
   var secondPoints = getBadSnakeCollisionPoints(secondSnake)
-  var minDistance = 17 * renderScale
+  var minDistance = 17 * renderScale * Math.max(
+    firstSnake.collisionScale || 1,
+    secondSnake.collisionScale || 1
+  )
   var minDistanceSquared = minDistance * minDistance
   var closestHit
 
@@ -203,6 +217,8 @@ function applyBadSnakeBounce(firstSnake, secondSnake) {
 
   if (!closestHit) return
 
+  if (tryBadSnakeRivalFight(firstSnake, secondSnake)) return
+
   var distance = Math.sqrt(closestHit.distanceSquared) || 0.001
   var normalX = closestHit.dx / distance
   var normalY = closestHit.dy / distance
@@ -215,6 +231,61 @@ function applyBadSnakeBounce(firstSnake, secondSnake) {
   moveBadSnake(secondSnake, normalX * overlap * secondPushShare, normalY * overlap * secondPushShare)
   firstSnake.heading = turnTowardAngle(firstSnake.heading, Math.atan2(-normalY, -normalX), badSnakeTurnRate * 3)
   secondSnake.heading = turnTowardAngle(secondSnake.heading, Math.atan2(normalY, normalX), badSnakeTurnRate * 3)
+}
+
+function tryBadSnakeRivalFight(firstSnake, secondSnake) {
+  if (
+    firstSnake.isTrapped ||
+    secondSnake.isTrapped ||
+    isPlayerNearBadSnake(firstSnake) ||
+    isPlayerNearBadSnake(secondSnake)
+  ) return false
+
+  if (Math.random() < 0.5) {
+    return tryBadSnakeRivalBite(firstSnake, secondSnake) ||
+      tryBadSnakeRivalBite(secondSnake, firstSnake)
+  }
+
+  return tryBadSnakeRivalBite(secondSnake, firstSnake) ||
+    tryBadSnakeRivalBite(firstSnake, secondSnake)
+}
+
+function tryBadSnakeRivalBite(attacker, target) {
+  var now = Date.now()
+  if (now < (attacker.rivalBiteCooldownUntil || 0)) return false
+
+  var biteRadius = 15 * renderScale * Math.max(
+    attacker.collisionScale || 1,
+    target.collisionScale || 1
+  )
+
+  for (var segmentIndex = 0; segmentIndex < target.segments.length; segmentIndex++) {
+    var targetSegment = target.segments[segmentIndex]
+    if (!arePointsTouching(attacker.head.x, attacker.head.y, targetSegment.x, targetSegment.y, biteRadius)) continue
+
+    var stolenSegments = removeBadSnakeSegments(target, badSnakeRivalBiteSegments)
+    if (!stolenSegments) return false
+
+    growBadSnake(attacker, stolenSegments)
+    attacker.rivalBiteCooldownUntil = now + badSnakeRivalBiteCooldown
+    target.rivalBiteCooldownUntil = now + badSnakeRivalBiteCooldown
+    var biteNormal = getCollisionNormal(
+      attacker.head.x - targetSegment.x,
+      attacker.head.y - targetSegment.y,
+      attacker.heading
+    )
+    attacker.heading = getReflectedHeading(
+      attacker.heading,
+      biteNormal.x,
+      biteNormal.y
+    )
+    attacker.wanderAngle = attacker.heading
+    attacker.nextWanderAt = now + 450
+    playRivalSound('bite')
+    return true
+  }
+
+  return false
 }
 
 function getBadSnakeCollisionPoints(enemySnake) {

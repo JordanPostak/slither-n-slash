@@ -12,7 +12,10 @@ function foodRandom() {
 
         if (burnedFood.isBad) {
           spawnOrangePoof([{ x: burnedFood.x, y: burnedFood.y }])
-          foods[i] = createOrangeRewardOrb(burnedFood, 1)
+          foods[i] = createOrangeRewardOrb(
+            burnedFood,
+            Math.max(1, Math.round(burnedFood.sizeScale || 1))
+          )
         } else {
           foods.splice(i, 1)
           i--
@@ -55,7 +58,7 @@ function foodRandom() {
     foods[i].x += foods[i].dx * crushSpeedScale
     foods[i].y += foods[i].dy * crushSpeedScale
 
-    var foodEdgeSize = 13 * renderScale
+    var foodEdgeSize = 13 * renderScale * (foods[i].sizeScale || 1)
 
     if (foods[i].leavingArena) {
       foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
@@ -100,8 +103,8 @@ function foodRandom() {
 }
 
 function applySnakeBodyBounce(entity) {
-  var entityRadius = 9 * renderScale
-  var minDistance = snakeBodyBounceRadius + entityRadius
+  var entityRadius = 9 * renderScale * (entity.sizeScale || 1)
+  var minDistance = snakeBodyBounceRadius * getPlayerSizeScale() + entityRadius
   var minDistanceSquared = minDistance * minDistance
   var nearestSegment = null
   var nearestDistanceSquared = Infinity
@@ -327,12 +330,12 @@ function getCanvasMinSide() {
 }
 
 function getRenderScale() {
-  var shortestSide = Math.min(canvas.width, canvas.height)
+  var shortestSide = Math.min(canvas.width, canvas.height) / getArenaExpansionScale()
   return Math.max(0.52, Math.min(1, shortestSide / 620))
 }
 
 function getMotionScale() {
-  var shortestSide = Math.min(canvas.width, canvas.height)
+  var shortestSide = Math.min(canvas.width, canvas.height) / getArenaExpansionScale()
   var responsiveMotionScale = Math.max(0.56, Math.min(1, shortestSide / 700))
   return responsiveMotionScale * arenaMovementSpeedMultiplier
 }
