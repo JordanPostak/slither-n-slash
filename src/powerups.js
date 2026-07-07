@@ -70,7 +70,7 @@ function scheduleNextFireball() {
 function updateGoldenMouse() {
   var now = Date.now()
 
-  if (!goldenMouse && n >= mouseUnlockLength && now >= nextGoldenMouseSpawnAt) {
+  if (!goldenMouse && getPlayerProgressLength() >= mouseUnlockLength && now >= nextGoldenMouseSpawnAt) {
     goldenMouse = generateGoldenMouse()
   }
 

@@ -51,7 +51,7 @@ function createTreeSnake() {
     collisionScale: treeSnakeFixedScale,
     segmentSpacingScale: treeSnakeSegmentSpacingScale,
   }
-  var extraLength = Math.max(0, n - treeSnakeUnlockLength)
+  var extraLength = Math.max(0, getPlayerProgressLength() - treeSnakeUnlockLength)
   var lengthBonus = Math.floor(Math.log1p(extraLength) * 0.65)
 
   addInitialPredatorSegments(enemySnake, treeSnakeStartSegments + lengthBonus)
@@ -114,7 +114,7 @@ function countBadSnakesBySpecies(species) {
 }
 
 function ensureTreeSnakePredator() {
-  if (n < treeSnakeUnlockLength) return
+  if (getPlayerProgressLength() < treeSnakeUnlockLength) return
   if (countBadSnakesBySpecies('tree-snake') >= treeSnakeMaxCount) return
   if (Date.now() < nextTreeSnakeSpawnAt) return
 
@@ -122,7 +122,7 @@ function ensureTreeSnakePredator() {
 }
 
 function getProgressiveCentipedeLengthBonus() {
-  var extraPlayerSegments = Math.max(0, n - startingSegments)
+  var extraPlayerSegments = Math.max(0, getPlayerProgressLength() - startingSegments)
   return Math.floor(Math.log1p(extraPlayerSegments) * 0.72)
 }
 
@@ -214,7 +214,7 @@ function updateBadSnake(enemySnake) {
 
 function getBadSnakeSpeed(enemySnake) {
   var enemyExtraLength = Math.max(0, enemySnake.segments.length - badSnakeStartSegments)
-  var playerExtraLength = Math.max(0, n - startingSegments)
+  var playerExtraLength = Math.max(0, getPlayerProgressLength() - startingSegments)
   var lengthSpeed = enemyExtraLength * badSnakeSpeedPerSegment
   var playerPressureSpeed = playerExtraLength * badSnakePlayerSpeedPerSegment
 
@@ -435,7 +435,7 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     return
   }
 
-  if (enemySnake.species === 'centipede' && n >= playerBiteUpgradeLength) {
+  if (enemySnake.species === 'centipede' && getPlayerProgressLength() >= playerBiteUpgradeLength) {
     handleDominantPlayerCentipedeContact(
       enemySnake,
       playerHitIndex,
@@ -464,7 +464,10 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   if (playerHitIndex >= 0) {
     var playerContactX = x[playerHitIndex]
     var playerContactY = y[playerHitIndex]
-    var stolenPlayerSegments = removePlayerSegments(snakeBiteSegments)
+    var predatorBiteSegments = enemySnake.species === 'centipede'
+      ? centipedeBiteSegments
+      : snakeBiteSegments
+    var stolenPlayerSegments = removePlayerSegments(predatorBiteSegments)
     if (stolenPlayerSegments) {
       growBadSnake(enemySnake, stolenPlayerSegments)
     }

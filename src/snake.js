@@ -1,20 +1,25 @@
 // Player snake rendering, face and tail art, trail following, and corner cutting.
 
+var playerTongueNextFlickAt = Date.now() + 700 + Math.random() * 1800
+var playerTongueFlickStartedAt = 0
+var playerTongueDoubleFlick = false
+
 function drawSnake() {
   var renderStride = getSnakeRenderStride()
+  var lastBodyIndex = Math.max(0, x.length - 2)
 
   if (x.length > 0) {
     drawSnakeSegment(0)
   }
 
   var lastRenderedIndex = 0
-  for (var i = 1; i < x.length; i += renderStride) {
+  for (var i = 1; i <= lastBodyIndex; i += renderStride) {
     drawSnakeSegment(i)
     lastRenderedIndex = i
   }
 
-  if (x.length > 1 && lastRenderedIndex !== x.length - 1) {
-    drawSnakeSegment(x.length - 1)
+  if (lastBodyIndex > 0 && lastRenderedIndex !== lastBodyIndex) {
+    drawSnakeSegment(lastBodyIndex)
   }
 
   drawSnakeTail()
@@ -26,25 +31,26 @@ function getSnakeRenderStride() {
 }
 
 function getPlayerSizeScale() {
-  var extraSegments = Math.max(0, n - startingSegments)
-  return 1 + Math.log1p(extraSegments) * 0.26
+  // The canvas expands as the arena grows, which visually zooms the world out.
+  // Counter-scale the player, then add a gentle visible thickness increase so
+  // a very long snake still looks substantial without overwhelming the arena.
+  var extraSegments = Math.max(0, getPlayerProgressLength() - startingSegments)
+  var visibleThicknessGrowth = 1 + Math.log1p(extraSegments) * 0.025
+  return getArenaExpansionScale() * visibleThicknessGrowth
 }
 
 function getArenaExpansionScale() {
-  var extraSegments = Math.max(0, n - startingSegments)
-  return 1 + Math.log1p(extraSegments) * 0.12
+  var extraSegments = Math.max(0, getPlayerProgressLength() - startingSegments)
+  return 1 + Math.log1p(extraSegments) * 0.18
 }
 
 function getPlayerTurnRate() {
-  var extraSegments = Math.max(0, n - startingSegments)
-  var referenceExtraSegments = Math.max(1, turnRadiusReferenceLength - startingSegments)
-  var turnPenalty = 1 + Math.sqrt(extraSegments / referenceExtraSegments)
-  return turnRate / turnPenalty
+  return turnRate
 }
 
 function getPlayerSpeedScale() {
-  var extraSegments = Math.max(0, n - startingSegments)
-  return 1 + Math.log1p(extraSegments) * 0.04
+  // Match arena expansion so movement remains constant after canvas zoom-out.
+  return getArenaExpansionScale()
 }
 
 function drawSnakeSegment(i) {
@@ -71,6 +77,9 @@ function drawSnakeSegment(i) {
       segmentWidth,
       segmentHeight
     )
+    if (i === 0) {
+      drawPlayerSnakeTongue(segmentWidth, renderScale * playerSizeScale)
+    }
     ctx.restore()
     return
   }
@@ -91,6 +100,57 @@ function drawSnakeSegment(i) {
     drawSnakeFace(28 * renderScale, 46 * renderScale)
   }
 
+  ctx.restore()
+}
+
+function drawPlayerSnakeTongue(segmentWidth, tongueScale) {
+  var now = Date.now()
+
+  if (!playerTongueFlickStartedAt) {
+    if (now < playerTongueNextFlickAt) return
+    playerTongueFlickStartedAt = now
+    playerTongueDoubleFlick = Math.random() < 0.36
+  }
+
+  var elapsed = now - playerTongueFlickStartedAt
+  var flickDuration = 300
+  var secondFlickStart = 375
+  var sequenceDuration = playerTongueDoubleFlick
+    ? secondFlickStart + flickDuration
+    : flickDuration
+
+  if (elapsed >= sequenceDuration) {
+    playerTongueFlickStartedAt = 0
+    playerTongueNextFlickAt = now + 650 + Math.random() * 2850
+    return
+  }
+
+  var flickElapsed = elapsed
+  if (playerTongueDoubleFlick) {
+    if (elapsed >= flickDuration && elapsed < secondFlickStart) return
+    if (elapsed >= secondFlickStart) flickElapsed = elapsed - secondFlickStart
+  }
+
+  var flickProgress = Math.sin(flickElapsed / flickDuration * Math.PI)
+  var tongueReach = 12 * flickProgress * tongueScale
+  var tongueStartX = -segmentWidth / 2 + tongueScale
+  var tongueEndX = tongueStartX - tongueReach
+  var forkLength = 3.5 * flickProgress * tongueScale
+
+  ctx.save()
+  ctx.strokeStyle = '#ff4a63'
+  ctx.lineWidth = 1.6 * tongueScale
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  ctx.beginPath()
+  ctx.moveTo(tongueStartX, 0)
+  ctx.quadraticCurveTo(tongueStartX - tongueReach * 0.5, tongueScale, tongueEndX, 0)
+  ctx.moveTo(tongueEndX, 0)
+  ctx.lineTo(tongueEndX - forkLength, -forkLength * 0.65)
+  ctx.moveTo(tongueEndX, 0)
+  ctx.lineTo(tongueEndX - forkLength, forkLength * 0.65)
+  ctx.stroke()
   ctx.restore()
 }
 
@@ -230,17 +290,26 @@ function drawSnakeTail() {
 }
 
 function getSnakeTailRenderPose() {
-  var tailIndex = x.length - 1
-  var beforeTailIndex = Math.max(0, tailIndex - 1)
-  var tailAngle = Math.atan2(y[tailIndex] - y[beforeTailIndex], x[tailIndex] - x[beforeTailIndex])
+  var tailIndex = Math.max(0, x.length - 2)
   var playerSizeScale = getPlayerSizeScale()
+  var lastBodyPose = getSnakeSegmentRenderPose(tailIndex)
+  var lastBodyWidth = tailIndex === 0 ? 44 : 30
+  var bodyRearDistance = Math.max(7, lastBodyWidth / 2 - 2) * renderScale * playerSizeScale
+  var jointX = lastBodyPose.x - Math.cos(lastBodyPose.angle) * bodyRearDistance
+  var jointY = lastBodyPose.y - Math.sin(lastBodyPose.angle) * bodyRearDistance
+  var tailAngle = Math.atan2(snakeTailPoint.y - jointY, snakeTailPoint.x - jointX)
+  var tailCenterDistance = 23 * renderScale * playerSizeScale
 
   return {
-    x: x[tailIndex] + Math.cos(tailAngle) * 24 * renderScale * playerSizeScale,
-    y: y[tailIndex] + Math.sin(tailAngle) * 24 * renderScale * playerSizeScale,
+    x: jointX + Math.cos(tailAngle) * tailCenterDistance,
+    y: jointY + Math.sin(tailAngle) * tailCenterDistance,
     angle: tailAngle,
     sizeScale: playerSizeScale,
   }
+}
+
+function getSnakeTailFollowDistance() {
+  return 39 * renderScale * getPlayerSizeScale()
 }
 
 function drawSnakeFrontOverlaps(renderStride) {
@@ -256,7 +325,8 @@ function drawSnakeFrontOverlaps(renderStride) {
   var buckets = {}
   var overlapPairs = []
 
-  for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex += renderStride) {
+  var lastBodyIndex = x.length - 2
+  for (var segmentIndex = 0; segmentIndex <= lastBodyIndex; segmentIndex += renderStride) {
     var segmentPose = getSnakeSegmentRenderPose(segmentIndex)
     var layerPoint = {
       index: segmentIndex,
@@ -268,11 +338,10 @@ function drawSnakeFrontOverlaps(renderStride) {
     addSnakeLayerPointToBucket(layerPoint, bucketSize, buckets)
   }
 
-  var lastSegmentIndex = x.length - 1
-  if (layerPoints[layerPoints.length - 1].index !== lastSegmentIndex) {
-    var lastSegmentPose = getSnakeSegmentRenderPose(lastSegmentIndex)
+  if (layerPoints[layerPoints.length - 1].index !== lastBodyIndex) {
+    var lastSegmentPose = getSnakeSegmentRenderPose(lastBodyIndex)
     var lastLayerPoint = {
-      index: lastSegmentIndex,
+      index: lastBodyIndex,
       x: lastSegmentPose.x,
       y: lastSegmentPose.y,
       radius: bodyRadius,
@@ -381,7 +450,11 @@ function recordSnakeHeadTrail() {
 }
 
 function trimSnakeTrail() {
-  var requiredLength = (n + 3) * playerSegmentSpacing + 30 * renderScale
+  var tailTrailPadding = Math.max(
+    3 * playerSegmentSpacing + 30 * renderScale,
+    getSnakeTailFollowDistance() + 30 * renderScale
+  )
+  var requiredLength = n * playerSegmentSpacing + tailTrailPadding
   var accumulatedLength = 0
   var keepFromIndex = 0
 
@@ -414,8 +487,11 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
   var olderPointIndex = newestPointIndex - 1
   var accumulatedLength = 0
 
-  for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
-    var targetDistance = (segmentIndex + 1) * playerSegmentSpacing
+  for (var segmentIndex = 0; segmentIndex <= n; segmentIndex++) {
+    var isTailPoint = segmentIndex === n
+    var targetDistance = isTailPoint
+      ? Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance()
+      : (segmentIndex + 1) * playerSegmentSpacing
     var positionFound = false
 
     while (olderPointIndex >= 0) {
@@ -424,8 +500,16 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
 
       if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
         var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
-        x[segmentIndex] = newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress
-        y[segmentIndex] = newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress
+        var sampledX = newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress
+        var sampledY = newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress
+
+        if (isTailPoint) {
+          snakeTailPoint.x = sampledX
+          snakeTailPoint.y = sampledY
+        } else {
+          x[segmentIndex] = sampledX
+          y[segmentIndex] = sampledY
+        }
         positionFound = true
         break
       }
@@ -437,8 +521,13 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
 
     if (!positionFound) {
       var oldestPoint = snakeTrail[0]
-      x[segmentIndex] = oldestPoint.x
-      y[segmentIndex] = oldestPoint.y
+      if (isTailPoint) {
+        snakeTailPoint.x = oldestPoint.x
+        snakeTailPoint.y = oldestPoint.y
+      } else {
+        x[segmentIndex] = oldestPoint.x
+        y[segmentIndex] = oldestPoint.y
+      }
     }
   }
 
@@ -475,12 +564,12 @@ function applySnakeCornerCut(previousX, previousY) {
   }
 }
 
-function addSnakeSegments(count) {
+function addSnakeSegments(count, previousProgressLength) {
   for (var i = 0; i < count; i++) {
     changes(n - count + i + 1)
   }
 
-  var previousMaxEnergy = getBoostDurationForSegmentCount(n - count)
+  var previousMaxEnergy = getBoostDurationForSegmentCount(previousProgressLength || n - count)
   var nextMaxEnergy = getBoostDuration()
   var addedCapacity = Math.max(0, nextMaxEnergy - previousMaxEnergy)
 
@@ -494,7 +583,7 @@ function addSnakeSegments(count) {
 function resetSnakeBody() {
   snakeTrail = []
 
-  var trailLength = (n + 3) * playerSegmentSpacing
+  var trailLength = Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance() + 30 * renderScale
   var pointSpacing = Math.max(1.5, 2.5 * renderScale)
 
   for (var distance = trailLength; distance > 0; distance -= pointSpacing) {

@@ -63,7 +63,7 @@ function applyKeyboardControls(currentTurnRate) {
 }
 
 function getBoostDuration() {
-  return getBoostDurationForSegmentCount(n)
+  return getBoostDurationForSegmentCount(getPlayerProgressLength())
 }
 
 function getBoostDurationForSegmentCount(segmentCount) {

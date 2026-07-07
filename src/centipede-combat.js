@@ -148,14 +148,20 @@ function getEnemyBodyHitIndex(enemySnake, pointX, pointY, radius) {
 }
 
 function removePlayerSegments(count) {
-  if (n <= startingSegments) return 0
+  if (score <= 0) return 0
 
-  var removedSegments = Math.min(count, n - startingSegments)
+  var removedSegments = Math.min(count, score)
 
-  n -= removedSegments
-  x.splice(n)
-  y.splice(n)
   score = Math.max(0, score - removedSegments)
+
+  var nextVisibleSegments = getPlayerVisibleSegmentCount()
+  if (nextVisibleSegments < n) {
+    n = nextVisibleSegments
+    x.splice(n)
+    y.splice(n)
+  }
+
+  updateSnakeBodyFromTrail()
   updateScoreDisplay()
 
   var nextMaxEnergy = getBoostDuration()
@@ -182,7 +188,7 @@ function removeBadSnakeSegments(enemySnake, count) {
 }
 
 function getPlayerBiteSegments() {
-  return n >= playerBiteUpgradeLength
+  return getPlayerProgressLength() >= playerBiteUpgradeLength
     ? upgradedPlayerBiteSegments
     : snakeBiteSegments
 }
@@ -200,9 +206,13 @@ function removeBadSnake(enemySnake) {
 function addPlayerSegments(count) {
   if (count <= 0) return
 
-  n += count
+  var previousProgressLength = getPlayerProgressLength()
+  var previousVisibleSegments = n
+
   score += count
+  n = getPlayerVisibleSegmentCount()
+
   updateScoreDisplay()
-  addSnakeSegments(count)
+  addSnakeSegments(Math.max(0, n - previousVisibleSegments), previousProgressLength)
   updateHighScore(score)
 }

@@ -81,7 +81,7 @@ function startFoodTimer() {
 }
 
 function spawnTimedFood(foodType) {
-  if (foodType === 'mouse' && n < mouseUnlockLength) return
+  if (foodType === 'mouse' && getPlayerProgressLength() < mouseUnlockLength) return
 
   foods.push(generateFood(foodType))
 }

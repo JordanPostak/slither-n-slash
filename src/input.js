@@ -19,7 +19,8 @@ function resizeCanvas() {
   renderScale = getRenderScale()
   motionScale = getMotionScale()
   segLength = 10 * renderScale
-  playerSegmentSpacing = 19 * renderScale
+  // Keep every player section the same apparent length as the arena zooms out.
+  playerSegmentSpacing = 19 * renderScale * arenaExpansionScale
   arenaCornerRadius = getArenaCornerRadius()
   snakeBodyBounceRadius = 18 * renderScale
   swallowRadius = 24 * renderScale
@@ -41,6 +42,9 @@ function shiftWorldForArenaResize(offsetX, offsetY) {
     x[segmentIndex] += offsetX
     y[segmentIndex] += offsetY
   }
+
+  snakeTailPoint.x += offsetX
+  snakeTailPoint.y += offsetY
 
   for (var trailIndex = 0; trailIndex < snakeTrail.length; trailIndex++) {
     snakeTrail[trailIndex].x += offsetX

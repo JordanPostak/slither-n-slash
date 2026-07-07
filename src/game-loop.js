@@ -50,16 +50,13 @@ function animate() {
           }
 
           if (foods[i].isBad && !isBerserkerActive()) {
-            var poisonDamage = Math.max(1, Math.round(n * poisonBeetleDamageFraction))
+            var poisonDamage = Math.max(1, Math.round(getPlayerProgressLength() * poisonBeetleDamageFraction))
             removePlayerSegments(poisonDamage)
             playSound('badFoodSound')
           } else {
             var growthValue = foods[i].isBad ? 1 : foods[i].growthValue || 1
 
-            n += growthValue
-            score += growthValue
-            updateScoreDisplay()
-            addSnakeSegments(growthValue)
+            addPlayerSegments(growthValue)
             playSound('goodFoodSound')
           }
 
@@ -101,11 +98,7 @@ function animate() {
           } else {
             var goldenMouseGrowth = goldenMouse.growthValue || mouseGrowthValue
 
-            n += goldenMouseGrowth
-            score += goldenMouseGrowth
-            updateScoreDisplay()
-            addSnakeSegments(goldenMouseGrowth)
-            if (score > highScore) setHighScore(score)
+            addPlayerSegments(goldenMouseGrowth)
             activateBerserker()
             goldenMouse = undefined
             scheduleNextGoldenMouse()

@@ -2,6 +2,7 @@
 
 var canvas, ctx
 var startingSegments = 6
+var playerMaxVisibleSegments = 50
 var n = startingSegments
 var score = 0
 var a = 0
@@ -42,6 +43,7 @@ var poisonBeetleDamageFraction = 0.25
 var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var snakeTrail = []
+var snakeTailPoint = { x: 0, y: 0 }
 var steerTarget
 var steerAngleTarget
 var snakeHead = { x: 0, y: 0 }
@@ -94,12 +96,12 @@ var treeSnakeFixedScale = 1.8
 var treeSnakeSegmentSpacingScale = 1.5
 var treeSnakeRespawnDelay = 60000
 var nextTreeSnakeSpawnAt = 0
+var centipedeBiteSegments = 3
 var snakeBiteSegments = 3
 var playerBiteUpgradeLength = 100
 var upgradedPlayerBiteSegments = 6
 var snakeCutCooldown = 1650
 var snakeCornerCutStrength = 0.15
-var turnRadiusReferenceLength = 100
 var trappedCrushDuration = 3000
 var centipedePoofDuration = 460
 var cachedSnakeTrapLoops = []
@@ -112,6 +114,22 @@ var wormHeadImage = new Image()
 var wormBodyImages = []
 var wormTailImage = new Image()
 var selectedSnakeSkin = 1
+
+function getPlayerProgressLength() {
+  return startingSegments + Math.max(0, score)
+}
+
+function getPlayerProgressLengthForScore(nextScore) {
+  return startingSegments + Math.max(0, nextScore)
+}
+
+function getPlayerVisibleSegmentCountForScore(nextScore) {
+  return Math.min(playerMaxVisibleSegments, getPlayerProgressLengthForScore(nextScore))
+}
+
+function getPlayerVisibleSegmentCount() {
+  return getPlayerVisibleSegmentCountForScore(score)
+}
 var gameAudioContext
 var rivalAudioContext
 var scoreElement = document.getElementById('score')

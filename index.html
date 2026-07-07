@@ -82,8 +82,8 @@
         </div>
         <div class="instruction-grid">
           <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad. Pause to reposition landscape controls.</p></article>
-          <article><span>2</span><h3>Feed</h3><p>Eat grubs and orange balls to grow. At 100 segments, large mice begin appearing and add six segments. After their blue arrival shield fades, poison beetles remove 25% of your current length.</p></article>
-          <article><span>3</span><h3>Grow</h3><p>Growth has no set limit: longer snakes become thicker and faster, encounter longer centipedes, and turn more widely as the arena keeps expanding. Large mice and the Green Tree Snake predator unlock at 100 segments. Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost.</p></article>
+          <article><span>2</span><h3>Feed</h3><p>Eat grubs and orange balls to grow your score and progression. At 100 progression, large mice begin appearing and add six points. After their blue arrival shield fades, poison beetles remove 25% of your current progression.</p></article>
+          <article><span>3</span><h3>Grow</h3><p>Your visible snake caps at 50 body pieces, but score growth keeps scaling the arena, thickness, boost capacity, and unlocks. The arena zooms farther out around you, making bugs and animals appear smaller and move more slowly. Large mice and the Green Tree Snake predator unlock at 100 progression. Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost.</p></article>
           <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures progressively slow and turn orange; larger or longer creatures take more time relative to your snake. Keep the loop closed until they become food.</p></article>
         </div>
       </section>
@@ -96,15 +96,15 @@
         <div class="preview-grid">
           <figure class="game-preview preview-hunt">
             <div class="preview-scene"><span class="mini-snake"></span><span class="mini-target"></span></div>
-            <figcaption><b>Hunt</b><span>Grubs add one segment. Large mice unlock at 100 segments and add six. Avoid poison beetles, or trap them and wait for a safe orange reward.</span></figcaption>
+            <figcaption><b>Hunt</b><span>Grubs add one point. Large mice unlock at 100 progression and add six. Avoid poison beetles, or trap them and wait for a safe orange reward.</span></figcaption>
           </figure>
           <figure class="game-preview preview-rivals">
             <div class="preview-scene"><span class="mini-snake"></span><span class="rival-snake"></span></div>
-            <figcaption><b>Battle</b><span>Centipedes only hunt you when nearby; at a distance they fight over food. At 100 segments your six-segment bites overpower centipedes, but a larger Green Tree Snake enters with 50 body segments. It stays one fixed adult size and grows only by adding more segments.</span></figcaption>
+            <figcaption><b>Battle</b><span>Centipedes only hunt you when nearby, steal three segments per bite, and fight over food at a distance. At 100 progression your six-segment bites overpower them, but a larger Green Tree Snake enters with 50 body segments. It stays one fixed adult size and grows only by adding more segments.</span></figcaption>
           </figure>
           <figure class="game-preview preview-power">
             <div class="preview-scene"><span class="mini-snake"></span><span class="power-flare">&#9876;</span></div>
-            <figcaption><b>Power up</b><span>After 100 segments, the Golden Mouse can appear. It adds six segments and starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
+            <figcaption><b>Power up</b><span>After 100 progression, the Golden Mouse can appear. It adds six points and starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
           </figure>
         </div>
         <p class="mobile-swipe-hint" aria-hidden="true">Swipe to see more &#8594;</p>
@@ -207,6 +207,11 @@
             moving prey, solid centipede combat, body-loop trapping, glowing rewards, and rare power-ups.
           </p>
           <p>
+            The current build keeps the player snake fast and readable by capping the visible body at 50 pieces,
+            while score progression continues to expand the arena, increase thickness, extend boost capacity,
+            and unlock bigger threats.
+          </p>
+          <p>
             Close any section of your body into a loop to trap enclosed creatures. Keep the loop closed while their
             bodies slow down and turn orange; larger or longer prey takes more time, and opening early lets them recover and escape. Completed
             transformations create stationary orange food that both you and centipedes can eat.
@@ -215,13 +220,14 @@
             The game is in active development. Planned additions include more arenas, creatures and power-ups,
             expanded accessibility settings, balance improvements, and an optional leaderboard.
           </p>
-          <p class="version-badge">Current release: <b>v0.5.0</b></p>
+          <p class="version-badge">Current release: <b>v0.5.1</b></p>
         </div>
       </section>
 
       <section id="news" class="content-section" aria-labelledby="news-title">
         <div class="section-heading"><p class="eyebrow">News &amp; changelog</p><h2 id="news-title">What's new</h2></div>
         <div class="changelog">
+          <article><time datetime="2026-07-06">July 6, 2026</time><h3>v0.5.1 — Progression &amp; Polish</h3><ul><li>Capped the visible player snake at 50 body pieces while score progression keeps scaling the arena, thickness, boost capacity, unlocks, and enemy pressure.</li><li>Kept large-snake movement responsive by preserving player speed and turn radius as the world zooms outward.</li><li>Added sporadic tongue flicks with occasional quick double flicks for the selected player snake.</li><li>Refined predator balance: centipedes steal three progression points per bite, large progression lets the player push centipedes aside, and Green Tree Snakes unlock after 100 progression.</li><li>Updated how-to-play, arena notes, FAQ, and documentation to explain progression, traps, power-ups, poison beetles, and orange rewards.</li></ul></article>
           <article><time datetime="2026-07-04">July 4, 2026</time><h3>v0.5.0 — Trap &amp; Transform</h3><ul><li>Added five selectable player snake skins before the first run.</li><li>Added body-loop traps for centipedes, grubs, mice, poison beetles, and larger predators.</li><li>Trapped creatures progressively slow and turn orange; transformation time now scales with their size and length compared with the player.</li><li>Reworked solid collisions, centipede bites, and trail-following snake movement.</li><li>Fireballs now burn only poison beetles into orange rewards, while Golden Mice activate Berserker mode.</li><li>Added two-second poison-beetle arrival protection and two-second post-Berserker recovery.</li><li>Improved mobile play mode, adjustable controls, page navigation, and responsive layouts.</li></ul></article>
           <article><time datetime="2026-07-03">July 3, 2026</time><h3>v0.4.1</h3><ul><li>Added the Golden Mouse and Berserker power-up.</li><li>Improved rival snake behavior.</li><li>Refined mobile controls and boost feedback.</li></ul></article>
         </div>
@@ -234,8 +240,8 @@
           <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and boost control. Landscape play provides the largest arena view, and you can pause to slide both control boxes to a comfortable height.</p></details>
           <details><summary>Can I save my progress?</summary><p>Your high score is stored in this browser. A paused run remains available while the page stays open, but active runs and high scores do not sync between devices.</p></details>
           <details><summary>How does trapping work?</summary><p>Make a closed loop with any part of your snake's body. Fully enclosed creatures progressively slow and turn orange without a separate trap ring. Larger or longer creatures take more time relative to your snake. Keep the loop intact until they become orange balls; if it opens early, they recover and escape.</p></details>
-          <details><summary>How do power-ups work?</summary><p>Once your snake reaches 100 segments, the rare Golden Mouse can appear. It adds six segments and activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>
-          <details><summary>What do poison beetles do?</summary><p>A poison beetle removes 25% of your current length unless Berserker mode protects you; it cannot reduce the snake below its starting length. New beetles have a visible blue two-second arrival shield, and trapping or burning one converts it into safe food.</p></details>
+          <details><summary>How do power-ups work?</summary><p>Once your snake reaches 100 progression, the rare Golden Mouse can appear. It adds six points and activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>
+          <details><summary>What do poison beetles do?</summary><p>A poison beetle removes 25% of your current progression unless Berserker mode protects you; it cannot reduce the snake below its starting length. New beetles have a visible blue two-second arrival shield, and trapping or burning one converts it into safe food.</p></details>
           <details><summary>Do I need to create an account?</summary><p>No. Slither N' Slash currently has no user accounts and does not ask for personal information to play.</p></details>
         </div>
       </section>

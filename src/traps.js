@@ -77,7 +77,7 @@ function updateTrappedFoodCrush(food, trapLoop, now) {
 }
 
 function getTrappedCrushDuration(entity) {
-  var playerMass = Math.max(1, n * getPlayerSizeScale())
+  var playerMass = Math.max(1, getPlayerProgressLength() * getPlayerSizeScale())
   var entityScale = entity.collisionScale || entity.sizeScale || 1
   var entityMass
 
