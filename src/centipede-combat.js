@@ -188,9 +188,17 @@ function removeBadSnakeSegments(enemySnake, count) {
 }
 
 function getPlayerBiteSegments() {
-  return getPlayerProgressLength() >= playerBiteUpgradeLength
+  var biteSegments = getPlayerProgressLength() >= playerBiteUpgradeLength
     ? upgradedPlayerBiteSegments
     : snakeBiteSegments
+
+  if (isCoilSlashStriking() && coilSlashStrikeDistanceTotal > 0) {
+    var strikeProgress = 1 - coilSlashStrikeDistanceRemaining / coilSlashStrikeDistanceTotal
+    var nearStrikeBonus = Math.ceil((1 - strikeProgress) * biteSegments)
+    return biteSegments + Math.max(1, nearStrikeBonus)
+  }
+
+  return biteSegments
 }
 
 function removeBadSnake(enemySnake) {

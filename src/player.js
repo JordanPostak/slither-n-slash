@@ -2,20 +2,45 @@
 
 function moveSnakeHead() {
   var currentTurnRate = getPlayerTurnRate()
-  applyKeyboardControls(currentTurnRate)
+  var aimingTurnRate = isCoilSlashCharging()
+    ? currentTurnRate * coilSlashAimTurnMultiplier
+    : currentTurnRate
+  applyKeyboardControls(aimingTurnRate)
 
   if (gamepadSteerAngleTarget !== undefined) {
-    headingAngle = turnTowardAngle(headingAngle, gamepadSteerAngleTarget, currentTurnRate)
+    headingAngle = turnTowardAngle(headingAngle, gamepadSteerAngleTarget, aimingTurnRate)
   } else if (steerTarget) {
     var targetAngle = Math.atan2(steerTarget.y - snakeHead.y, steerTarget.x - snakeHead.x)
-    headingAngle = turnTowardAngle(headingAngle, targetAngle, currentTurnRate)
+    headingAngle = turnTowardAngle(headingAngle, targetAngle, aimingTurnRate)
   } else if (steerAngleTarget !== undefined) {
-    headingAngle = turnTowardAngle(headingAngle, steerAngleTarget, currentTurnRate)
+    headingAngle = turnTowardAngle(headingAngle, steerAngleTarget, aimingTurnRate)
+  }
+
+  if (isCoilSlashCharging()) {
+    if (isCoilSlashEntryActive()) {
+      moveSnakeHeadThroughCoilEntry()
+      applyRoundedSnakeBounds()
+      recordSnakeHeadTrail()
+      updateSnakeBodyFromTrail()
+      return
+    }
+
+    coilSlashEntryStrikeAngle = headingAngle
+    anchorCoilSlashHeadToPivot()
+    updateSnakeBodyFromTrail()
+    return
+  }
+
+  if (isCoilSlashStriking()) {
+    moveSnakeHeadForCoilSlashStrike()
+    applyRoundedSnakeBounds()
+    recordSnakeHeadTrail()
+    updateSnakeBodyFromTrail()
+    return
   }
 
   var currentSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
   if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
-  if (boosting) currentSpeed *= boostMultiplier
 
   snakeHead.x += Math.cos(headingAngle) * currentSpeed
   snakeHead.y += Math.sin(headingAngle) * currentSpeed
@@ -83,16 +108,24 @@ function updateBoostEnergy() {
     boostEnergy = maxEnergy
   }
 
-  if (boostHeld) {
-    if (boostEnergy > 0) {
-      boostEnergy = Math.max(0, boostEnergy - elapsed)
+  if (boostHeld && !isCoilSlashStriking()) {
+    if (boostEnergy > 0 || isCoilSlashCharging()) {
+      if (!isCoilSlashCharging()) {
+        startCoilSlashEntry(now)
+      }
+
       setBoosting(true)
-    } else {
-      setBoosting(false)
+      coilSlashChargeProgress = getCoilSlashChargeProgress(now)
+      boostEnergy = Math.max(0, maxEnergy * (1 - coilSlashChargeProgress))
     }
   } else {
-    boostEnergy = Math.min(maxEnergy, boostEnergy + getBoostRechargeRate() * elapsed)
-    setBoosting(false)
+    if (isCoilSlashCharging()) {
+      releaseCoilSlash()
+    }
+
+    if (!isCoilSlashStriking()) {
+      boostEnergy = Math.min(maxEnergy, boostEnergy + getBoostRechargeRate() * elapsed)
+    }
   }
 
   boostCoolingDown = !boosting && boostEnergy < maxEnergy
@@ -119,6 +152,20 @@ function isBoostControlActive() {
 function resetBoost() {
   boostCoolingDown = false
   boostEnergy = getBoostDuration()
+  coilSlashChargeProgress = 0
+  coilSlashHoldStartedAt = 0
+  coilSlashEntryStartedAt = 0
+  coilSlashEntryStartAngle = 0
+  coilSlashEntryStrikeAngle = 0
+  coilSlashEntryDirection = 1
+  coilSlashNextEntryDirection = 1
+  coilSlashEntryTurned = 0
+  coilSlashEntrySettleProgress = 0
+  coilSlashPivotX = 0
+  coilSlashPivotY = 0
+  coilSlashStrikeDistanceRemaining = 0
+  coilSlashStrikeDistanceTotal = 0
+  coilSlashStrikeCharge = 0
   touchBoosting = false
   releaseMobileControls()
   lastBoostUpdateAt = Date.now()
@@ -131,7 +178,225 @@ function setBoosting(nextBoosting) {
 
   boosting = nextBoosting
   document.body.classList.toggle('is-boosting', boosting)
+  document.body.classList.toggle('is-coil-slashing', boosting)
   updateBoostMeterStatus(true)
+}
+
+function isCoilSlashCharging() {
+  return boosting
+}
+
+function isCoilSlashStriking() {
+  return coilSlashStrikeDistanceRemaining > 0
+}
+
+function startCoilSlashEntry(now) {
+  coilSlashEntryStartedAt = now
+  coilSlashHoldStartedAt = now
+  coilSlashEntryStartAngle = headingAngle
+  coilSlashEntryStrikeAngle = headingAngle
+  var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
+  var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
+
+  if (turningLeft && !turningRight) {
+    coilSlashEntryDirection = -1
+  } else if (turningRight && !turningLeft) {
+    coilSlashEntryDirection = 1
+  } else {
+    coilSlashEntryDirection = coilSlashNextEntryDirection
+  }
+
+  coilSlashNextEntryDirection = -coilSlashEntryDirection
+  coilSlashEntryTurned = 0
+  coilSlashEntrySettleProgress = 0
+  setCoilSlashPivotFromHead()
+}
+
+function isCoilSlashEntryActive() {
+  if (!coilSlashEntryStartedAt) return false
+  return coilSlashEntryTurned < coilSlashEntryTargetTurn || coilSlashEntrySettleProgress < 1
+}
+
+function getCoilSlashEntryProgress(now) {
+  if (!coilSlashEntryStartedAt) return 1
+  return Math.max(0, Math.min(1, coilSlashEntryTurned / coilSlashEntryTargetTurn))
+}
+
+function moveSnakeHeadThroughCoilEntry() {
+  var loopRadius = getCoilSlashLoopRadius()
+  var forwardX = Math.cos(coilSlashEntryStrikeAngle)
+  var forwardY = Math.sin(coilSlashEntryStrikeAngle)
+  var sideX = -forwardY
+  var sideY = forwardX
+
+  if (coilSlashEntryTurned < coilSlashEntryTargetTurn) {
+    var turnStep = Math.min(
+      getPlayerTurnRate() * coilSlashEntrySpeedMultiplier,
+      coilSlashEntryTargetTurn - coilSlashEntryTurned
+    )
+    coilSlashEntryTurned += turnStep
+
+    var orbitAngle = Math.PI + coilSlashEntryTurned * coilSlashEntryDirection
+    var tangentX = coilSlashEntryDirection * (
+      -forwardX * Math.sin(orbitAngle) +
+      sideX * Math.cos(orbitAngle)
+    )
+    var tangentY = coilSlashEntryDirection * (
+      -forwardY * Math.sin(orbitAngle) +
+      sideY * Math.cos(orbitAngle)
+    )
+
+    snakeHead.x = coilSlashPivotX + forwardX * Math.cos(orbitAngle) * loopRadius + sideX * Math.sin(orbitAngle) * loopRadius
+    snakeHead.y = coilSlashPivotY + forwardY * Math.cos(orbitAngle) * loopRadius + sideY * Math.sin(orbitAngle) * loopRadius
+    headingAngle = Math.atan2(tangentY, tangentX)
+    return
+  }
+
+  moveSnakeHeadThroughCoilSettle(loopRadius, forwardX, forwardY, sideX, sideY)
+}
+
+function moveSnakeHeadThroughCoilSettle(loopRadius, forwardX, forwardY, sideX, sideY) {
+  var settleSpeed = snakeSpeed * motionScale * getPlayerSpeedScale() * coilSlashEntrySpeedMultiplier
+  if (isBerserkerActive()) settleSpeed *= berserkerSpeedMultiplier
+
+  var settlePathDistance = loopRadius * 2.35
+  coilSlashEntrySettleProgress = Math.min(
+    1,
+    coilSlashEntrySettleProgress + settleSpeed / Math.max(1, settlePathDistance)
+  )
+
+  var t = coilSlashEntrySettleProgress
+  var sBend = Math.sin(t * Math.PI * 2) * loopRadius * 0.24 * coilSlashEntryDirection
+  var along = -loopRadius + loopRadius * 2 * t
+  var tangentSide = Math.cos(t * Math.PI * 2) * Math.PI * 2 * loopRadius * 0.24 * coilSlashEntryDirection
+  var tangentForward = loopRadius * 2
+
+  snakeHead.x = coilSlashPivotX + forwardX * along + sideX * sBend
+  snakeHead.y = coilSlashPivotY + forwardY * along + sideY * sBend
+  headingAngle = Math.atan2(
+    forwardY * tangentForward + sideY * tangentSide,
+    forwardX * tangentForward + sideX * tangentSide
+  )
+
+  if (coilSlashEntrySettleProgress >= 1) {
+    headingAngle = coilSlashEntryStrikeAngle
+    anchorCoilSlashHeadToPivot()
+  }
+}
+
+function getCoilSlashHeadAnchorDistance() {
+  return Math.max(
+    playerSegmentSpacing * 0.82,
+    15 * renderScale * getPlayerSizeScale()
+  )
+}
+
+function getCoilSlashLoopRadius() {
+  var turnStep = Math.max(0.001, getPlayerTurnRate() * coilSlashEntrySpeedMultiplier)
+  var entrySpeed = snakeSpeed * motionScale * getPlayerSpeedScale() * coilSlashEntrySpeedMultiplier
+  if (isBerserkerActive()) entrySpeed *= berserkerSpeedMultiplier
+  return entrySpeed / turnStep
+}
+
+function getCoilSlashRangeScale() {
+  return renderScale * getPlayerSizeScale()
+}
+
+function getCoilSlashLengthProgress() {
+  var visibleLength = Math.min(playerMaxVisibleSegments, getPlayerProgressLength())
+  var lengthRange = Math.max(1, playerMaxVisibleSegments - startingSegments)
+  return Math.max(0, Math.min(1, (visibleLength - startingSegments) / lengthRange))
+}
+
+function getCoilSlashMaxDistance() {
+  var lengthProgress = getCoilSlashLengthProgress()
+  return coilSlashStartingMaxDistance +
+    (coilSlashMaxDistance - coilSlashStartingMaxDistance) * lengthProgress
+}
+
+function setCoilSlashPivotFromHead() {
+  var loopRadius = getCoilSlashLoopRadius()
+
+  coilSlashPivotX = snakeHead.x + Math.cos(headingAngle) * loopRadius
+  coilSlashPivotY = snakeHead.y + Math.sin(headingAngle) * loopRadius
+}
+
+function anchorCoilSlashHeadToPivot() {
+  if (!coilSlashPivotX && !coilSlashPivotY) {
+    setCoilSlashPivotFromHead()
+  }
+
+  var loopRadius = getCoilSlashLoopRadius()
+
+  snakeHead.x = coilSlashPivotX + Math.cos(headingAngle) * loopRadius
+  snakeHead.y = coilSlashPivotY + Math.sin(headingAngle) * loopRadius
+}
+
+function getCoilSlashChargeProgress(now) {
+  if (!coilSlashHoldStartedAt) return 0
+
+  var feedDistance = getCoilSlashFeedDistance(now)
+  var bodyLength = Math.max(
+    playerSegmentSpacing,
+    n * playerSegmentSpacing + getSnakeTailFollowDistance()
+  )
+
+  return Math.max(0, Math.min(1, feedDistance / bodyLength))
+}
+
+function getCoilSlashFeedDistance(now) {
+  if (!coilSlashHoldStartedAt) return 0
+
+  var elapsedSeconds = Math.max(0, (now - coilSlashHoldStartedAt) / 1000)
+  var normalSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
+  if (isBerserkerActive()) normalSpeed *= berserkerSpeedMultiplier
+
+  var entryFeedDistance = coilSlashEntryStartedAt
+    ? getCoilSlashEntryProgress(now) * coilSlashEntryTargetTurn * normalSpeed
+    : 0
+  var holdFeedDistance = elapsedSeconds * normalSpeed * coilSlashFeedSpeedMultiplier
+
+  return Math.max(entryFeedDistance, holdFeedDistance)
+}
+
+function releaseCoilSlash() {
+  coilSlashChargeProgress = getCoilSlashChargeProgress(Date.now())
+  var releasedCharge = coilSlashEntryStartedAt
+    ? Math.max(coilSlashChargeProgress, coilSlashMinChargeToStrike)
+    : coilSlashChargeProgress
+
+  setBoosting(false)
+  coilSlashChargeProgress = 0
+  coilSlashHoldStartedAt = 0
+  coilSlashEntryStartedAt = 0
+  coilSlashEntryTurned = 0
+  coilSlashEntrySettleProgress = 0
+
+  if (releasedCharge < coilSlashMinChargeToStrike) return
+
+  coilSlashStrikeCharge = releasedCharge
+  var maxStrikeDistance = getCoilSlashMaxDistance()
+  coilSlashStrikeDistanceTotal = (
+    coilSlashMinDistance +
+    (maxStrikeDistance - coilSlashMinDistance) * releasedCharge
+  ) * getCoilSlashRangeScale()
+  coilSlashStrikeDistanceRemaining = coilSlashStrikeDistanceTotal
+}
+
+function moveSnakeHeadForCoilSlashStrike() {
+  var strikeSpeed = coilSlashStrikeSpeed * motionScale * getCoilSlashRangeScale()
+  if (isBerserkerActive()) strikeSpeed *= berserkerSpeedMultiplier
+
+  var travel = Math.min(coilSlashStrikeDistanceRemaining, strikeSpeed)
+  snakeHead.x += Math.cos(headingAngle) * travel
+  snakeHead.y += Math.sin(headingAngle) * travel
+  coilSlashStrikeDistanceRemaining -= travel
+
+  if (coilSlashStrikeDistanceRemaining <= 0) {
+    coilSlashStrikeDistanceRemaining = 0
+    coilSlashStrikeDistanceTotal = 0
+    coilSlashStrikeCharge = 0
+  }
 }
 
 function updateBoostMeterStatus(forceUpdate) {
@@ -144,8 +409,8 @@ function updateBoostMeterStatus(forceUpdate) {
 
   if (boosting) {
     boostState = 'active'
-    updateBoostMeter(boostMeterFill, boostProgress, boostState, forceUpdate)
-    updateBoostControlVisual(boostProgress, boostState, forceUpdate)
+    updateBoostMeter(boostMeterFill, coilSlashChargeProgress, boostState, forceUpdate)
+    updateBoostControlVisual(coilSlashChargeProgress, boostState, forceUpdate)
     return
   }
 

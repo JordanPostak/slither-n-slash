@@ -5,6 +5,11 @@ var playerTongueFlickStartedAt = 0
 var playerTongueDoubleFlick = false
 
 function drawSnake() {
+  if (isCoilSlashCharging()) {
+    drawCoilSlashSnake()
+    return
+  }
+
   var renderStride = getSnakeRenderStride()
   var lastBodyIndex = Math.max(0, x.length - 2)
 
@@ -24,6 +29,26 @@ function drawSnake() {
 
   drawSnakeTail()
   drawSnakeFrontOverlaps(renderStride)
+}
+
+function drawCoilSlashSnake() {
+  var renderStride = getSnakeRenderStride()
+  var lastBodyIndex = Math.max(0, x.length - 2)
+  var sCurveSegments = Math.min(lastBodyIndex, getCoilSlashSCurveSegmentCount())
+
+  for (var loopIndex = lastBodyIndex; loopIndex > sCurveSegments; loopIndex -= renderStride) {
+    drawSnakeSegment(loopIndex)
+  }
+
+  drawSnakeTail()
+
+  for (var sIndex = sCurveSegments; sIndex >= 1; sIndex--) {
+    drawSnakeSegment(sIndex)
+  }
+
+  if (x.length > 0) {
+    drawSnakeSegment(0)
+  }
 }
 
 function getSnakeRenderStride() {
@@ -51,6 +76,70 @@ function getPlayerTurnRate() {
 function getPlayerSpeedScale() {
   // Match arena expansion so movement remains constant after canvas zoom-out.
   return getArenaExpansionScale()
+}
+
+function getCoilSlashSCurveSegmentCount() {
+  return Math.max(4, Math.floor(n * 0.34))
+}
+
+function drawCoilSlashPreview() {
+  if (!isCoilSlashCharging() || coilSlashChargeProgress <= 0) return
+  if (isCoilSlashEntryActive()) return
+
+  var charge = Math.max(0, Math.min(1, coilSlashChargeProgress))
+  var rangeScale = getCoilSlashRangeScale()
+  var maxPreviewDistance = getCoilSlashMaxDistance()
+  var baseDistance = (
+    coilSlashMinDistance +
+    (maxPreviewDistance - coilSlashMinDistance) * charge
+  ) * rangeScale
+  var startDistance = 34 * rangeScale
+  var startX = snakeHead.x + Math.cos(headingAngle) * startDistance
+  var startY = snakeHead.y + Math.sin(headingAngle) * startDistance
+  var endX = snakeHead.x + Math.cos(headingAngle) * baseDistance
+  var endY = snakeHead.y + Math.sin(headingAngle) * baseDistance
+  var sideX = -Math.sin(headingAngle)
+  var sideY = Math.cos(headingAngle)
+  var arrowSize = (14 + charge * 18) * rangeScale
+
+  ctx.save()
+  ctx.globalAlpha = 0.34 + charge * 0.44
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  var gradient = ctx.createLinearGradient(startX, startY, endX, endY)
+  gradient.addColorStop(0, 'rgba(255, 247, 220, 0.96)')
+  gradient.addColorStop(0.3, 'rgba(255, 154, 85, 0.92)')
+  gradient.addColorStop(1, 'rgba(255, 77, 35, 0.24)')
+
+  ctx.strokeStyle = gradient
+  ctx.lineWidth = (8 + charge * 8) * rangeScale
+  ctx.beginPath()
+  ctx.moveTo(startX, startY)
+  ctx.lineTo(endX, endY)
+  ctx.stroke()
+
+  ctx.strokeStyle = 'rgba(255, 247, 220, 0.82)'
+  ctx.lineWidth = (2 + charge * 2) * rangeScale
+  ctx.beginPath()
+  ctx.moveTo(endX, endY)
+  ctx.lineTo(
+    endX - Math.cos(headingAngle) * arrowSize + sideX * arrowSize * 0.58,
+    endY - Math.sin(headingAngle) * arrowSize + sideY * arrowSize * 0.58
+  )
+  ctx.moveTo(endX, endY)
+  ctx.lineTo(
+    endX - Math.cos(headingAngle) * arrowSize - sideX * arrowSize * 0.58,
+    endY - Math.sin(headingAngle) * arrowSize - sideY * arrowSize * 0.58
+  )
+  ctx.stroke()
+
+  ctx.globalAlpha = 0.28 + charge * 0.32
+  ctx.fillStyle = 'rgba(255, 154, 85, 0.9)'
+  ctx.beginPath()
+  ctx.arc(startX, startY, (13 + charge * 9) * rangeScale, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
 }
 
 function drawSnakeSegment(i) {
@@ -160,7 +249,9 @@ function getSnakeSegmentRenderPose(i) {
   var followerX = i < x.length - 1 ? x[i + 1] : x[i]
   var followerY = i < y.length - 1 ? y[i + 1] : y[i]
   var angle = i === 0
-    ? Math.atan2(leaderY - y[i], leaderX - x[i])
+    ? (isCoilSlashCharging() || isCoilSlashStriking()
+      ? headingAngle
+      : Math.atan2(leaderY - y[i], leaderX - x[i]))
     : Math.atan2(leaderY - followerY, leaderX - followerX)
   var playerSizeScale = getPlayerSizeScale()
   var headOffset = i === 0 ? 14 * renderScale * playerSizeScale : 0
@@ -477,6 +568,11 @@ function trimSnakeTrail() {
 function updateSnakeBodyFromTrail(skipCornerCut) {
   if (snakeTrail.length === 0) return
 
+  if (isCoilSlashCharging() && !isCoilSlashEntryActive()) {
+    updateSnakeBodyForCoilSlash()
+    return
+  }
+
   var previousX = x.slice()
   var previousY = y.slice()
   x.length = n
@@ -532,6 +628,177 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
   }
 
   if (!skipCornerCut) applySnakeCornerCut(previousX, previousY)
+}
+
+function updateSnakeBodyForCoilSlash() {
+  var now = Date.now()
+  var feedDistance = getCoilSlashFeedDistance(now)
+  coilSlashChargeProgress = getCoilSlashChargeProgress(now)
+
+  var naturalFeedDistance = Math.max(0, feedDistance - playerSegmentSpacing)
+  var normalBody = sampleSnakeBodyFromTrail(naturalFeedDistance)
+  if (!normalBody) return
+
+  x.length = n
+  y.length = n
+
+  var playerSizeScale = getPlayerSizeScale()
+  var charge = Math.max(0, Math.min(1, coilSlashChargeProgress))
+  var forwardX = Math.cos(headingAngle)
+  var forwardY = Math.sin(headingAngle)
+  var sideX = -forwardY
+  var sideY = forwardX
+  var pivotRadius = getCoilSlashLoopRadius()
+  var entryLoopSegments = Math.max(
+    4,
+    Math.min(n, Math.ceil(Math.PI * 2 * pivotRadius / Math.max(1, playerSegmentSpacing)))
+  )
+  var innerCoilStartIndex = Math.min(n, entryLoopSegments)
+  var innerCoilSegments = Math.max(1, n - innerCoilStartIndex)
+  var hasCoilPivot = coilSlashPivotX !== 0 || coilSlashPivotY !== 0
+  var circleCenterX = hasCoilPivot
+    ? coilSlashPivotX
+    : snakeHead.x - forwardX * getCoilSlashHeadAnchorDistance()
+  var circleCenterY = hasCoilPivot
+    ? coilSlashPivotY
+    : snakeHead.y - forwardY * getCoilSlashHeadAnchorDistance()
+  var circleStep = playerSegmentSpacing / pivotRadius
+  var innerTurns = 1.15
+  var spin = feedDistance / Math.max(1, playerSegmentSpacing) * 0.22
+  var maxLoadedSegments = Math.min(n + 1, charge * (n + 1))
+
+  for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
+    var targetX
+    var targetY
+
+    if (segmentIndex < innerCoilStartIndex) {
+      // This is the same turn-radius loop the head just traveled through.
+      // Body sections enter the coil by following this exact outer path from
+      // the head backward instead of jumping into a separate generated shape.
+      var circleAngle = -coilSlashEntryDirection * ((segmentIndex + 1) * circleStep)
+      var loopRadius = pivotRadius
+      targetX = circleCenterX + forwardX * Math.cos(circleAngle) * loopRadius + sideX * Math.sin(circleAngle) * loopRadius
+      targetY = circleCenterY + forwardY * Math.cos(circleAngle) * loopRadius + sideY * Math.sin(circleAngle) * loopRadius
+    } else {
+      // After the circle is established, the rest of the body feeds through
+      // that pivot and coils inside it. The loaded part rotates like a wheel;
+      // unloaded sections still use their natural trail below.
+      var coilIndex = segmentIndex - innerCoilStartIndex
+      var coilProgress = coilIndex / Math.max(1, innerCoilSegments - 1)
+      var loadBlend = Math.max(0, Math.min(1, maxLoadedSegments - segmentIndex))
+      var coilAngle = Math.PI * 2 + coilProgress * Math.PI * 2 * innerTurns * coilSlashEntryDirection + spin * loadBlend
+      var ringRadius = pivotRadius * (0.84 - coilProgress * 0.38)
+
+      targetX = circleCenterX + forwardX * Math.cos(coilAngle) * ringRadius + sideX * Math.sin(coilAngle) * ringRadius
+      targetY = circleCenterY + forwardY * Math.cos(coilAngle) * ringRadius + sideY * Math.sin(coilAngle) * ringRadius
+    }
+
+    var loadBlend = Math.max(0, Math.min(1, maxLoadedSegments - segmentIndex))
+    var naturalX = normalBody.x[segmentIndex]
+    var naturalY = normalBody.y[segmentIndex]
+
+    x[segmentIndex] = naturalX + (targetX - naturalX) * loadBlend
+    y[segmentIndex] = naturalY + (targetY - naturalY) * loadBlend
+  }
+
+  var tailBlend = Math.max(0, Math.min(1, maxLoadedSegments - n))
+  var tailLoopProgress = 1
+  var tailAngle = Math.PI * 2 + tailLoopProgress * Math.PI * 2 * innerTurns * coilSlashEntryDirection + spin * tailBlend
+  var tailRingRadius = pivotRadius * (0.84 - tailLoopProgress * 0.38)
+  var targetTailX = circleCenterX + forwardX * Math.cos(tailAngle) * tailRingRadius + sideX * Math.sin(tailAngle) * tailRingRadius
+  var targetTailY = circleCenterY + forwardY * Math.cos(tailAngle) * tailRingRadius + sideY * Math.sin(tailAngle) * tailRingRadius
+
+  snakeTailPoint.x = normalBody.tailX + (targetTailX - normalBody.tailX) * tailBlend
+  snakeTailPoint.y = normalBody.tailY + (targetTailY - normalBody.tailY) * tailBlend
+
+  applySnakeCornerCut(normalBody.x, normalBody.y)
+  constrainCoilSlashSegmentSpacing()
+}
+
+function constrainCoilSlashSegmentSpacing() {
+  var maxSpacing = playerSegmentSpacing * 1.18
+  var leadX = snakeHead.x
+  var leadY = snakeHead.y
+
+  for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
+    var dx = x[segmentIndex] - leadX
+    var dy = y[segmentIndex] - leadY
+    var distance = Math.hypot(dx, dy)
+
+    if (distance > maxSpacing) {
+      x[segmentIndex] = leadX + dx / distance * maxSpacing
+      y[segmentIndex] = leadY + dy / distance * maxSpacing
+    }
+
+    leadX = x[segmentIndex]
+    leadY = y[segmentIndex]
+  }
+}
+
+function sampleSnakeBodyFromTrail(trailAdvanceDistance) {
+  if (snakeTrail.length === 0) return
+
+  var sampledX = []
+  var sampledY = []
+  var tailX = snakeTailPoint.x
+  var tailY = snakeTailPoint.y
+  var newestPointIndex = snakeTrail.length - 1
+  var newerPoint = snakeTrail[newestPointIndex]
+  var olderPointIndex = newestPointIndex - 1
+  var accumulatedLength = 0
+
+  for (var segmentIndex = 0; segmentIndex <= n; segmentIndex++) {
+    var isTailPoint = segmentIndex === n
+    var targetDistance = isTailPoint
+      ? Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance()
+      : (segmentIndex + 1) * playerSegmentSpacing
+    targetDistance = Math.max(0, targetDistance - (trailAdvanceDistance || 0))
+    var positionFound = false
+
+    while (olderPointIndex >= 0) {
+      var olderPoint = snakeTrail[olderPointIndex]
+      var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+      if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
+        var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
+        var sampledPointX = newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress
+        var sampledPointY = newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress
+
+        if (isTailPoint) {
+          tailX = sampledPointX
+          tailY = sampledPointY
+        } else {
+          sampledX[segmentIndex] = sampledPointX
+          sampledY[segmentIndex] = sampledPointY
+        }
+
+        positionFound = true
+        break
+      }
+
+      accumulatedLength += edgeLength
+      newerPoint = olderPoint
+      olderPointIndex--
+    }
+
+    if (!positionFound) {
+      var oldestPoint = snakeTrail[0]
+      if (isTailPoint) {
+        tailX = oldestPoint.x
+        tailY = oldestPoint.y
+      } else {
+        sampledX[segmentIndex] = oldestPoint.x
+        sampledY[segmentIndex] = oldestPoint.y
+      }
+    }
+  }
+
+  return {
+    x: sampledX,
+    y: sampledY,
+    tailX: tailX,
+    tailY: tailY,
+  }
 }
 
 function applySnakeCornerCut(previousX, previousY) {

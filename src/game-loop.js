@@ -110,6 +110,7 @@ function animate() {
       }
 
       drawBerserkerAura()
+      drawCoilSlashPreview()
       drawSnake()
     }
 
