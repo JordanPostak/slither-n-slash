@@ -9,15 +9,15 @@ function bouncePlayerOffBadSnake(contactX, contactY, predatorScale) {
   predatorScale = predatorScale || 1
   var separation = 26 * renderScale * predatorScale
   var distance = Math.hypot(snakeHead.x - contactX, snakeHead.y - contactY)
+  var pushDistance = Math.max(2 * renderScale * predatorScale, Math.min(7 * renderScale * predatorScale, (separation - distance) * 0.42))
 
-  snakeHead.x += normal.x * Math.max(6 * renderScale * predatorScale, separation - distance)
-  snakeHead.y += normal.y * Math.max(6 * renderScale * predatorScale, separation - distance)
+  snakeHead.x += normal.x * pushDistance
+  snakeHead.y += normal.y * pushDistance
   headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 3.2)
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail()
+  updateSnakeBodyFromTrail(true)
 }
 
 function bounceSnakeHeadsApart(enemySnake) {
@@ -26,7 +26,7 @@ function bounceSnakeHeadsApart(enemySnake) {
     snakeHead.y - enemySnake.head.y,
     headingAngle
   )
-  var pushDistance = 10 * renderScale
+  var pushDistance = 4 * renderScale
 
   snakeHead.x += normal.x * pushDistance
   snakeHead.y += normal.y * pushDistance
@@ -39,8 +39,7 @@ function bounceSnakeHeadsApart(enemySnake) {
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail()
+  updateSnakeBodyFromTrail(true)
 }
 
 function pushBadSnakeAwayFromDominantPlayer(enemySnake, playerContactX, playerContactY, enemyContactX, enemyContactY) {
@@ -183,6 +182,8 @@ function removePlayerSegments(count) {
     n = nextVisibleSegments
     x.splice(n)
     y.splice(n)
+    snakeSegmentGrowthProgress.splice(n)
+    snakeSegmentGrowthStartedAt.splice(n)
   }
 
   updateSnakeBodyFromTrail()

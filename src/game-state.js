@@ -44,6 +44,10 @@ var x = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var y = Array.apply(null, Array(n)).map(Number.prototype.valueOf, 0)
 var snakeTrail = []
 var snakeTailPoint = { x: 0, y: 0 }
+var snakeSegmentGrowthProgress = []
+var snakeSegmentGrowthStartedAt = []
+var snakeSegmentGrowthDuration = 850
+var snakeSegmentGrowthStagger = 180
 var steerTarget
 var steerAngleTarget
 var snakeHead = { x: 0, y: 0 }
@@ -130,8 +134,13 @@ var snakeCornerCutStrength = 0.15
 var regularSlitherAmplitude = 0.24
 var regularSlitherSpeed = 0.006
 var regularSlitherPhase = 0.72
+var regularSlitherWavePhase = 0
+var lastRegularSlitherWaveAt = Date.now()
 var boostSlitherAmplitudeMultiplier = 2.55
 var boostSlitherSpeedMultiplier = 1.65
+var boostSlitherBlend = 0
+var boostSlitherBlendRate = 0.16
+var slitherCollisionPadding = 5
 var trappedCrushDuration = 3000
 var centipedePoofDuration = 460
 var cachedSnakeTrapLoops = []

@@ -105,7 +105,7 @@ function nudgeTrappedBadSnake(enemySnake, contactX, contactY, enemyContactX, ene
 
   var predatorScale = enemySnake.collisionScale || 1
   moveBadSnake(enemySnake, normal.x * 2.5 * renderScale * predatorScale, normal.y * 2.5 * renderScale * predatorScale)
-  enemySnake.heading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
+  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 3)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 350
 }
@@ -231,12 +231,12 @@ function bounceBadSnakeOffPlayer(enemySnake, contactX, contactY) {
   var predatorScale = enemySnake.collisionScale || 1
   var separation = 24 * renderScale * predatorScale
   var distance = Math.hypot(enemySnake.head.x - contactX, enemySnake.head.y - contactY)
-  var pushDistance = Math.max(5 * renderScale * predatorScale, separation - distance)
-  var reflectedHeading = getReflectedHeading(enemySnake.heading, normal.x, normal.y)
+  var pushDistance = Math.max(2 * renderScale * predatorScale, Math.min(9 * renderScale * predatorScale, (separation - distance) * 0.5))
+  var softHeading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 4)
 
   moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
-  enemySnake.heading = reflectedHeading
-  enemySnake.wanderAngle = reflectedHeading
+  enemySnake.heading = softHeading
+  enemySnake.wanderAngle = softHeading
   enemySnake.nextWanderAt = Date.now() + 650
 }
 

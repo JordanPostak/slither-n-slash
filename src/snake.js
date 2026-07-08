@@ -575,6 +575,7 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
 
   var previousX = x.slice()
   var previousY = y.slice()
+  updateSnakeSegmentGrowthProgress()
   x.length = n
   y.length = n
 
@@ -585,9 +586,7 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
 
   for (var segmentIndex = 0; segmentIndex <= n; segmentIndex++) {
     var isTailPoint = segmentIndex === n
-    var targetDistance = isTailPoint
-      ? Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance()
-      : (segmentIndex + 1) * playerSegmentSpacing
+    var targetDistance = getSnakeSegmentTrailDistance(segmentIndex, isTailPoint)
     var positionFound = false
 
     while (olderPointIndex >= 0) {
@@ -640,9 +639,14 @@ function applyRegularSnakeSlither() {
   }
 
   var playerSizeScale = getPlayerSizeScale()
-  var boostSlitherMultiplier = boosting ? boostSlitherAmplitudeMultiplier : 1
-  var slitherSpeedMultiplier = boosting ? boostSlitherSpeedMultiplier : 1
-  var waveTime = Date.now() * regularSlitherSpeed * slitherSpeedMultiplier
+  var now = Date.now()
+  updateBoostSlitherBlend()
+  var boostSlitherMultiplier = 1 + (boostSlitherAmplitudeMultiplier - 1) * boostSlitherBlend
+  var slitherSpeedMultiplier = 1 + (boostSlitherSpeedMultiplier - 1) * boostSlitherBlend
+  var elapsed = Math.max(0, Math.min(48, now - lastRegularSlitherWaveAt))
+  lastRegularSlitherWaveAt = now
+  regularSlitherWavePhase += elapsed * regularSlitherSpeed * slitherSpeedMultiplier
+  var waveTime = regularSlitherWavePhase
   var waveAmplitude = Math.min(
     12 * renderScale * playerSizeScale * boostSlitherMultiplier,
     playerSegmentSpacing * regularSlitherAmplitude * boostSlitherMultiplier
@@ -664,11 +668,64 @@ function applyRegularSnakeSlither() {
     var headStability = Math.min(1, (segmentIndex + 1) / 4)
     var wave = Math.sin(waveTime - segmentIndex * regularSlitherPhase) * waveAmplitude * headStability
 
-    x[segmentIndex] += normalX * wave
-    y[segmentIndex] += normalY * wave
+    var safeWave = getAvailableSnakeSlitherWave(
+      segmentIndex,
+      x[segmentIndex],
+      y[segmentIndex],
+      normalX * wave,
+      normalY * wave
+    )
+
+    x[segmentIndex] += normalX * wave * safeWave
+    y[segmentIndex] += normalY * wave * safeWave
   }
 
   constrainRegularSnakeSegmentSpacing()
+}
+
+function updateBoostSlitherBlend() {
+  var targetBlend = boosting ? 1 : 0
+  boostSlitherBlend += (targetBlend - boostSlitherBlend) * boostSlitherBlendRate
+
+  if (Math.abs(targetBlend - boostSlitherBlend) < 0.001) {
+    boostSlitherBlend = targetBlend
+  }
+}
+
+function getAvailableSnakeSlitherWave(segmentIndex, segmentX, segmentY, offsetX, offsetY) {
+  if (Math.abs(offsetX) + Math.abs(offsetY) < 0.001) return 0
+  if (isSnakeSlitherSpaceClear(segmentIndex, segmentX + offsetX, segmentY + offsetY)) return 1
+  if (isSnakeSlitherSpaceClear(segmentIndex, segmentX + offsetX * 0.5, segmentY + offsetY * 0.5)) return 0.5
+  if (isSnakeSlitherSpaceClear(segmentIndex, segmentX + offsetX * 0.25, segmentY + offsetY * 0.25)) return 0.25
+  return 0
+}
+
+function isSnakeSlitherSpaceClear(segmentIndex, targetX, targetY) {
+  var playerRadius = (segmentIndex === 0 ? 18 : 14) * renderScale * getPlayerSizeScale()
+  var clearancePadding = slitherCollisionPadding * renderScale
+
+  for (var enemyIndex = 0; enemyIndex < badSnakes.length; enemyIndex++) {
+    var enemySnake = badSnakes[enemyIndex]
+    if (!enemySnake || enemySnake.isBurning) continue
+
+    var enemyScale = enemySnake.collisionScale || 1
+    var enemyHeadRadius = 13 * renderScale * enemyScale
+
+    if (arePointsTouching(targetX, targetY, enemySnake.head.x, enemySnake.head.y, playerRadius + enemyHeadRadius + clearancePadding)) {
+      return false
+    }
+
+    for (var enemySegmentIndex = 0; enemySegmentIndex < enemySnake.segments.length; enemySegmentIndex++) {
+      var enemySegment = enemySnake.segments[enemySegmentIndex]
+      var enemyBodyRadius = 10 * renderScale * enemyScale
+
+      if (arePointsTouching(targetX, targetY, enemySegment.x, enemySegment.y, playerRadius + enemyBodyRadius + clearancePadding)) {
+        return false
+      }
+    }
+  }
+
+  return true
 }
 
 function constrainRegularSnakeSegmentSpacing() {
@@ -807,6 +864,7 @@ function constrainCoilSlashSegmentSpacing() {
 
 function sampleSnakeBodyFromTrail(trailAdvanceDistance) {
   if (snakeTrail.length === 0) return
+  updateSnakeSegmentGrowthProgress()
 
   var sampledX = []
   var sampledY = []
@@ -819,9 +877,7 @@ function sampleSnakeBodyFromTrail(trailAdvanceDistance) {
 
   for (var segmentIndex = 0; segmentIndex <= n; segmentIndex++) {
     var isTailPoint = segmentIndex === n
-    var targetDistance = isTailPoint
-      ? Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance()
-      : (segmentIndex + 1) * playerSegmentSpacing
+    var targetDistance = getSnakeSegmentTrailDistance(segmentIndex, isTailPoint)
     targetDistance = Math.max(0, targetDistance - (trailAdvanceDistance || 0))
     var positionFound = false
 
@@ -871,6 +927,59 @@ function sampleSnakeBodyFromTrail(trailAdvanceDistance) {
   }
 }
 
+function getSnakeSegmentTrailDistance(segmentIndex, isTailPoint) {
+  var distance = 0
+  var maxSegmentIndex = isTailPoint ? n : segmentIndex + 1
+
+  for (var i = 0; i < maxSegmentIndex; i++) {
+    distance += playerSegmentSpacing * getSnakeSegmentGrowthScale(i)
+  }
+
+  if (isTailPoint) distance += getSnakeTailFollowDistance()
+
+  return distance
+}
+
+function getSnakeSegmentGrowthScale(segmentIndex) {
+  var progress = snakeSegmentGrowthProgress[segmentIndex]
+  if (progress === undefined) return 1
+
+  var easedProgress = progress * progress * (3 - 2 * progress)
+  return 0.18 + easedProgress * 0.82
+}
+
+function queueSnakeSegmentGrowth(startIndex, count) {
+  var now = Date.now()
+
+  for (var i = 0; i < count; i++) {
+    var segmentIndex = startIndex + i
+    snakeSegmentGrowthProgress[segmentIndex] = 0
+    snakeSegmentGrowthStartedAt[segmentIndex] = now + i * snakeSegmentGrowthStagger
+  }
+}
+
+function updateSnakeSegmentGrowthProgress() {
+  if (snakeSegmentGrowthProgress.length > n) {
+    snakeSegmentGrowthProgress.splice(n)
+    snakeSegmentGrowthStartedAt.splice(n)
+  }
+
+  var now = Date.now()
+
+  for (var i = 0; i < snakeSegmentGrowthProgress.length; i++) {
+    if (snakeSegmentGrowthProgress[i] === undefined) continue
+
+    var startedAt = snakeSegmentGrowthStartedAt[i] || now
+    var progress = Math.max(0, Math.min(1, (now - startedAt) / snakeSegmentGrowthDuration))
+    snakeSegmentGrowthProgress[i] = progress
+
+    if (progress >= 1) {
+      snakeSegmentGrowthProgress[i] = undefined
+      snakeSegmentGrowthStartedAt[i] = undefined
+    }
+  }
+}
+
 function applySnakeCornerCut(previousX, previousY) {
   var leadX = snakeHead.x
   var leadY = snakeHead.y
@@ -902,9 +1011,13 @@ function applySnakeCornerCut(previousX, previousY) {
 }
 
 function addSnakeSegments(count, previousProgressLength) {
+  var previousVisibleCount = Math.max(0, n - count)
+
   for (var i = 0; i < count; i++) {
     changes(n - count + i + 1)
   }
+
+  if (count > 0) queueSnakeSegmentGrowth(previousVisibleCount, count)
 
   var previousMaxEnergy = getBoostDurationForSegmentCount(previousProgressLength || n - count)
   var nextMaxEnergy = getBoostDuration()
@@ -919,6 +1032,8 @@ function addSnakeSegments(count, previousProgressLength) {
 
 function resetSnakeBody() {
   snakeTrail = []
+  snakeSegmentGrowthProgress = []
+  snakeSegmentGrowthStartedAt = []
 
   var trailLength = Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance() + 30 * renderScale
   var pointSpacing = Math.max(1.5, 2.5 * renderScale)
