@@ -192,10 +192,10 @@ function applyBadSnakeBounces() {
 function applyBadSnakeBounce(firstSnake, secondSnake) {
   var firstPoints = getBadSnakeCollisionPoints(firstSnake)
   var secondPoints = getBadSnakeCollisionPoints(secondSnake)
-  var minDistance = 17 * renderScale * Math.max(
+  var minDistance = 16 * renderScale * Math.sqrt(Math.max(
     firstSnake.collisionScale || 1,
     secondSnake.collisionScale || 1
-  )
+  ))
   var minDistanceSquared = minDistance * minDistance
   var closestHit
 
@@ -227,10 +227,10 @@ function applyBadSnakeBounce(firstSnake, secondSnake) {
   var firstPushShare = firstSnake.isTrapped ? 0 : secondSnake.isTrapped ? 1 : 0.5
   var secondPushShare = secondSnake.isTrapped ? 0 : firstSnake.isTrapped ? 1 : 0.5
 
-  moveBadSnake(firstSnake, -normalX * overlap * firstPushShare, -normalY * overlap * firstPushShare)
-  moveBadSnake(secondSnake, normalX * overlap * secondPushShare, normalY * overlap * secondPushShare)
-  firstSnake.heading = getSoftCollisionHeading(firstSnake.heading, -normalX, -normalY, badSnakeTurnRate * 3)
-  secondSnake.heading = getSoftCollisionHeading(secondSnake.heading, normalX, normalY, badSnakeTurnRate * 3)
+  moveBadSnake(firstSnake, -normalX * overlap * firstPushShare * 0.65, -normalY * overlap * firstPushShare * 0.65)
+  moveBadSnake(secondSnake, normalX * overlap * secondPushShare * 0.65, normalY * overlap * secondPushShare * 0.65)
+  firstSnake.heading = getSoftCollisionHeading(firstSnake.heading, -normalX, -normalY, badSnakeTurnRate * 1.8)
+  secondSnake.heading = getSoftCollisionHeading(secondSnake.heading, normalX, normalY, badSnakeTurnRate * 1.8)
 }
 
 function tryBadSnakeRivalFight(firstSnake, secondSnake) {
@@ -301,5 +301,17 @@ function moveBadSnake(enemySnake, offsetX, offsetY) {
   for (var i = 0; i < enemySnake.segments.length; i++) {
     enemySnake.segments[i].x += offsetX
     enemySnake.segments[i].y += offsetY
+  }
+
+  if (enemySnake.tailPoint) {
+    enemySnake.tailPoint.x += offsetX
+    enemySnake.tailPoint.y += offsetY
+  }
+
+  if (enemySnake.trail) {
+    for (var trailIndex = 0; trailIndex < enemySnake.trail.length; trailIndex++) {
+      enemySnake.trail[trailIndex].x += offsetX
+      enemySnake.trail[trailIndex].y += offsetY
+    }
   }
 }

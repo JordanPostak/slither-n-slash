@@ -7,13 +7,17 @@ function bouncePlayerOffBadSnake(contactX, contactY, predatorScale) {
     headingAngle
   )
   predatorScale = predatorScale || 1
-  var separation = 26 * renderScale * predatorScale
+  var effectiveScale = Math.sqrt(predatorScale)
+  var separation = 23 * renderScale * effectiveScale
   var distance = Math.hypot(snakeHead.x - contactX, snakeHead.y - contactY)
-  var pushDistance = Math.max(2 * renderScale * predatorScale, Math.min(7 * renderScale * predatorScale, (separation - distance) * 0.42))
+  var pushDistance = Math.max(
+    1.2 * renderScale,
+    Math.min(4.5 * renderScale * effectiveScale, (separation - distance) * 0.28)
+  )
 
   snakeHead.x += normal.x * pushDistance
   snakeHead.y += normal.y * pushDistance
-  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 3.2)
+  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 1.65)
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
@@ -26,16 +30,54 @@ function bounceSnakeHeadsApart(enemySnake) {
     snakeHead.y - enemySnake.head.y,
     headingAngle
   )
-  var pushDistance = 4 * renderScale
+  var predatorScale = enemySnake.collisionScale || 1
+  var pushDistance = 3 * renderScale * Math.sqrt(predatorScale)
+
+  snakeHead.x += normal.x * pushDistance * 0.75
+  snakeHead.y += normal.y * pushDistance * 0.75
+  moveBadSnake(enemySnake, -normal.x * pushDistance, -normal.y * pushDistance)
+
+  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 1.65)
+  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, -normal.x, -normal.y, badSnakeTurnRate * 2.2)
+  enemySnake.wanderAngle = enemySnake.heading
+  enemySnake.nextWanderAt = Date.now() + 500
+  steerTarget = undefined
+  steerAngleTarget = undefined
+  applyRoundedSnakeBounds()
+  updateSnakeBodyFromTrail(true)
+}
+
+function slidePlayerOffBadSnake(contactX, contactY, predatorScale) {
+  var normal = getCollisionNormal(
+    snakeHead.x - contactX,
+    snakeHead.y - contactY,
+    headingAngle
+  )
+  var effectiveScale = Math.sqrt(predatorScale || 1)
+  var pushDistance = 2.4 * renderScale * effectiveScale
+
+  snakeHead.x += normal.x * pushDistance
+  snakeHead.y += normal.y * pushDistance
+  steerTarget = undefined
+  steerAngleTarget = undefined
+  applyRoundedSnakeBounds()
+  updateSnakeBodyFromTrail(true)
+}
+
+function slideSnakeHeadsApart(enemySnake) {
+  var normal = getCollisionNormal(
+    snakeHead.x - enemySnake.head.x,
+    snakeHead.y - enemySnake.head.y,
+    headingAngle
+  )
+  var pushDistance = 2.6 * renderScale * Math.sqrt(enemySnake.collisionScale || 1)
 
   snakeHead.x += normal.x * pushDistance
   snakeHead.y += normal.y * pushDistance
   moveBadSnake(enemySnake, -normal.x * pushDistance, -normal.y * pushDistance)
-
-  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 3.2)
-  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, -normal.x, -normal.y, badSnakeTurnRate * 4)
+  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, -normal.x, -normal.y, badSnakeTurnRate * 1.6)
   enemySnake.wanderAngle = enemySnake.heading
-  enemySnake.nextWanderAt = Date.now() + 500
+  enemySnake.nextWanderAt = Date.now() + 350
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
@@ -48,10 +90,10 @@ function pushBadSnakeAwayFromDominantPlayer(enemySnake, playerContactX, playerCo
     enemyContactY - playerContactY,
     enemySnake.heading
   )
-  var pushDistance = 22 * renderScale
+  var pushDistance = 16 * renderScale * Math.sqrt(enemySnake.collisionScale || 1)
 
   moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
-  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 4)
+  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 2.5)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 500
 }
@@ -136,10 +178,10 @@ function repelBadSnakeDuringRecovery(enemySnake, playerHitIndex, enemyHitIndex) 
 
   var normalX = dx / distance
   var normalY = dy / distance
-  var pushDistance = 20 * renderScale
+  var pushDistance = 14 * renderScale * Math.sqrt(enemySnake.collisionScale || 1)
 
   moveBadSnake(enemySnake, normalX * pushDistance, normalY * pushDistance)
-  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, normalX, normalY, badSnakeTurnRate * 4)
+  enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, normalX, normalY, badSnakeTurnRate * 2.5)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 500
 }
@@ -160,7 +202,7 @@ function getPlayerBodyHitIndex(pointX, pointY, radius) {
 }
 
 function getEnemyBodyHitIndex(enemySnake, pointX, pointY, radius) {
-  radius *= Math.max(getPlayerSizeScale(), enemySnake.collisionScale || 1)
+  radius *= Math.max(getPlayerSizeScale(), Math.sqrt(enemySnake.collisionScale || 1))
 
   for (var i = 0; i < enemySnake.segments.length; i++) {
     var segment = enemySnake.segments[i]
@@ -207,6 +249,8 @@ function removeBadSnakeSegments(enemySnake, count) {
 
   if (enemySnake.segments.length === 0) {
     removeBadSnake(enemySnake)
+  } else if (enemySnake.species === 'tree-snake') {
+    repairTreeSnakeAfterSegmentLoss(enemySnake)
   }
 
   return removedSegments

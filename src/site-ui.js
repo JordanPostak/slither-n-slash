@@ -293,9 +293,11 @@ function updateSnakeSkinPreviewSpines(timestamp) {
     var isSelected = option.classList.contains('is-selected')
     var shouldAnimate = isSelected && !shouldReduceMotion
     var skinNumber = Number(option.dataset.snakeSkin) || 1
-    var bodyStepScale = skinNumber === 4 ? 0.8 : 0.86
-    var headStepScale = skinNumber === 4 ? 0.82 : 0.88
-    var tailStepScale = skinNumber === 4 ? 0.68 : 0.74
+    var isCompactPreview = preview.clientWidth < 360
+    var compactStepScale = isCompactPreview ? 0.88 : 1
+    var bodyStepScale = (skinNumber === 4 ? 0.8 : 0.86) * compactStepScale
+    var headStepScale = (skinNumber === 4 ? 0.82 : 0.88) * compactStepScale
+    var tailStepScale = (skinNumber === 4 ? 0.68 : 0.74) * compactStepScale
     var pieceSteps = []
     var totalLength = 0
 
@@ -311,10 +313,15 @@ function updateSnakeSkinPreviewSpines(timestamp) {
     var headPiece = pieces[0]
     var headWidth = headPiece ? (headPiece.offsetWidth || 60) : 0
     var headForwardOverhang = headWidth * 0.72
+    var tongueClearance = 18
+    var tailClearance = 16
     var tailPiece = pieces[pieces.length - 1]
     var tailWidth = tailPiece ? (tailPiece.offsetWidth || 64) : 0
-    var visualLength = headForwardOverhang + totalLength + tailWidth
-    var startX = Math.max(8 + headForwardOverhang, (preview.clientWidth - visualLength) / 2 + headForwardOverhang)
+    var visualLength = tongueClearance + headForwardOverhang + totalLength + tailWidth + tailClearance
+    var startX = Math.max(
+      8 + tongueClearance + headForwardOverhang,
+      (preview.clientWidth - visualLength) / 2 + tongueClearance + headForwardOverhang
+    )
     var jointX = startX
     var jointY = preview.clientHeight * 0.08
     var waveSpeed = animationTime * 0.0058

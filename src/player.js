@@ -26,7 +26,6 @@ function moveSnakeHead() {
     }
 
     coilSlashEntryStrikeAngle = headingAngle
-    anchorCoilSlashHeadToPivot()
     updateSnakeBodyFromTrail()
     return
   }
@@ -245,9 +244,10 @@ function startCoilSlashEntry(now) {
   }
 
   coilSlashNextEntryDirection = -coilSlashEntryDirection
-  coilSlashEntryTurned = 0
-  coilSlashEntrySettleProgress = 0
-  setCoilSlashPivotFromHead()
+  coilSlashEntryTurned = coilSlashEntryTargetTurn
+  coilSlashEntrySettleProgress = 1
+  coilSlashPivotX = snakeHead.x
+  coilSlashPivotY = snakeHead.y
 }
 
 function isCoilSlashEntryActive() {
@@ -390,7 +390,7 @@ function getCoilSlashFeedDistance(now) {
   if (isBerserkerActive()) normalSpeed *= berserkerSpeedMultiplier
 
   var entryFeedDistance = coilSlashEntryStartedAt
-    ? getCoilSlashEntryProgress(now) * coilSlashEntryTargetTurn * normalSpeed
+    ? 0
     : 0
   var holdFeedDistance = elapsedSeconds * normalSpeed * coilSlashFeedSpeedMultiplier
 

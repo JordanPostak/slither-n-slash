@@ -75,12 +75,12 @@ body.is-berserker .game-shell {
 .game-stage {
   position: relative;
   --arena-corner-radius: 24px;
-  --arena-rock-size: 420px;
-  --arena-rock-tile-size: var(--arena-rock-size);
+  --arena-tile-size: 420px;
+  --arena-background-tile-size: var(--arena-tile-size);
   min-width: 0;
   min-height: 360px;
   overflow: hidden;
-  background: url("../assets/dark-rock-background.png") center / var(--arena-rock-tile-size) var(--arena-rock-tile-size) repeat;
+  background: url("../assets/dirt-background.png") center / var(--arena-background-tile-size) var(--arena-background-tile-size) repeat;
   border: 2px solid rgba(255, 214, 133, 0.42);
   border-radius: var(--arena-corner-radius);
   transition: background-size 280ms ease-out;
@@ -293,8 +293,8 @@ canvas {
   position: absolute;
   top: 50%;
   left: 0;
-  width: clamp(44px, 8.4vw, 60px);
-  height: clamp(24px, 4.4vw, 31px);
+  width: clamp(40px, 7.7vw, 55px);
+  height: clamp(22px, 4vw, 29px);
   margin-left: 0;
   object-fit: fill;
   transform-origin: 0 50%;
@@ -302,15 +302,15 @@ canvas {
 }
 
 .snake-skin-preview img:first-child {
-  width: clamp(60px, 11vw, 76px);
-  height: clamp(34px, 6vw, 42px);
+  width: clamp(55px, 10vw, 70px);
+  height: clamp(31px, 5.5vw, 39px);
   margin-left: 0;
   transform-origin: 72% 50%;
 }
 
 .snake-skin-preview img:last-child {
-  width: clamp(66px, 12vw, 84px);
-  height: clamp(22px, 4vw, 29px);
+  width: clamp(60px, 11vw, 76px);
+  height: clamp(20px, 3.7vw, 26px);
 }
 
 .snake-picker-tongue {
@@ -405,12 +405,43 @@ body.is-snake-selecting .play-snake-game-btn {
 
   .snake-skin-option {
     flex-basis: 100%;
-    min-height: 116px;
+    min-height: 104px;
     padding: 10px 8px;
   }
 
   .snake-skin-preview {
-    height: 72px;
+    height: 62px;
+  }
+
+  .snake-skin-preview img {
+    width: clamp(20px, 6.6vw, 27px);
+    height: clamp(12px, 3.7vw, 16px);
+  }
+
+  .snake-skin-preview img:first-child {
+    width: clamp(28px, 8.6vw, 36px);
+    height: clamp(17px, 5vw, 21px);
+  }
+
+  .snake-skin-preview img:last-child {
+    width: clamp(31px, 9.4vw, 39px);
+    height: clamp(11px, 3.3vw, 14px);
+  }
+
+  .snake-picker-tongue {
+    width: 17px;
+    height: 10px;
+  }
+
+  .snake-picker-tongue .tongue-main {
+    top: 4px;
+    width: 13px;
+  }
+
+  .snake-picker-tongue .tongue-fork-one,
+  .snake-picker-tongue .tongue-fork-two {
+    top: 4px;
+    width: 6px;
   }
 
   .snake-skin-carousel {
@@ -743,7 +774,7 @@ button {
   }
 
   .game-stage {
-    --arena-rock-size: 300px;
+    --arena-tile-size: 300px;
     grid-column: 1 / -1;
     grid-row: 2;
     min-height: 0;
@@ -981,7 +1012,7 @@ button {
   }
 
   .game-stage {
-    --arena-rock-size: 260px;
+    --arena-tile-size: 260px;
     grid-column: 2;
     grid-row: 1 / -1;
     border-top: 0;
@@ -1099,7 +1130,7 @@ button {
 
 @media (max-width: 420px) and (orientation: portrait) {
   .game-stage {
-    --arena-rock-size: 240px;
+    --arena-tile-size: 240px;
   }
 
   .snake-game-panel {

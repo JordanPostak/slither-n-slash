@@ -1,6 +1,153 @@
-// Procedural green tree snake predator used after the player reaches 100 segments.
+// Player-style snake predator used after the player reaches 100 segments.
 
 function drawTreeSnakePredator(enemySnake) {
+  if (isTreeSnakeSkinReady()) {
+    drawPlayerStyleTreeSnake(enemySnake)
+    return
+  }
+
+  drawFallbackTreeSnakePredator(enemySnake)
+}
+
+function isTreeSnakeSkinReady() {
+  if (!treeSnakeHeadImage.complete || !treeSnakeHeadImage.naturalWidth) return false
+  if (!treeSnakeTailImage.complete || !treeSnakeTailImage.naturalWidth) return false
+  if (!treeSnakeBodyImages.length) return false
+
+  for (var i = 0; i < treeSnakeBodyImages.length; i++) {
+    if (!treeSnakeBodyImages[i].complete || !treeSnakeBodyImages[i].naturalWidth) return false
+  }
+
+  return true
+}
+
+function drawPlayerStyleTreeSnake(enemySnake) {
+  if (enemySnake.segments.length <= 0) return
+
+  drawPlayerStyleTreeSnakeSegment(enemySnake, 0)
+
+  var lastBodyIndex = Math.max(0, enemySnake.segments.length - 2)
+  for (var i = 1; i <= lastBodyIndex; i++) {
+    drawPlayerStyleTreeSnakeSegment(enemySnake, i)
+  }
+
+  drawPlayerStyleTreeSnakeTail(enemySnake)
+}
+
+function drawPlayerStyleTreeSnakeSegment(enemySnake, segmentIndex) {
+  var pose = getTreeSnakeSegmentRenderPose(enemySnake, segmentIndex)
+  var isHead = segmentIndex === 0
+  var segmentImage = isHead
+    ? treeSnakeHeadImage
+    : treeSnakeBodyImages[(segmentIndex - 1) % treeSnakeBodyImages.length]
+  var treeSnakeSizeScale = getTreeSnakeSizeScale(enemySnake)
+  var treeSnakeRenderScale = renderScale * treeSnakeSizeScale
+  var segmentWidth = (isHead ? 44 : 30) * treeSnakeRenderScale
+  var segmentHeight = (isHead ? 24 : 18) * treeSnakeRenderScale
+
+  ctx.save()
+  ctx.translate(pose.x, pose.y)
+  ctx.rotate(pose.angle + Math.PI)
+  ctx.globalAlpha = getTreeSnakeCrushAlpha(enemySnake)
+  ctx.drawImage(
+    segmentImage,
+    -segmentWidth / 2,
+    -segmentHeight / 2,
+    segmentWidth,
+    segmentHeight
+  )
+
+  if (isHead) {
+    drawPlayerSnakeTongue(segmentWidth, treeSnakeRenderScale)
+  }
+
+  if (enemySnake.crushProgress > 0) {
+    drawTreeSnakeCrushOverlay(enemySnake.crushProgress, (isHead ? 17 : 11) * treeSnakeRenderScale, (isHead ? 9 : 6.8) * treeSnakeRenderScale)
+  }
+
+  ctx.restore()
+}
+
+function getTreeSnakeSegmentRenderPose(enemySnake, segmentIndex) {
+  var segment = enemySnake.segments[segmentIndex]
+
+  if (segmentIndex === 0) {
+    var headAngle = Math.atan2(enemySnake.head.y - segment.y, enemySnake.head.x - segment.x)
+    if (!Number.isFinite(headAngle)) headAngle = enemySnake.heading
+    var headOffset = 14 * renderScale * getTreeSnakeSizeScale(enemySnake)
+
+    return {
+      x: segment.x + Math.cos(headAngle) * headOffset,
+      y: segment.y + Math.sin(headAngle) * headOffset,
+      angle: headAngle,
+    }
+  }
+
+  var leader = enemySnake.segments[segmentIndex - 1]
+  var follower = segmentIndex < enemySnake.segments.length - 1
+    ? enemySnake.segments[segmentIndex + 1]
+    : segment
+  var angle = Math.atan2(leader.y - follower.y, leader.x - follower.x)
+  var bodyPivotOffset = 2.5 * renderScale * getTreeSnakeSizeScale(enemySnake)
+
+  return {
+    x: segment.x - Math.cos(angle) * bodyPivotOffset,
+    y: segment.y - Math.sin(angle) * bodyPivotOffset,
+    angle: angle,
+  }
+}
+
+function drawPlayerStyleTreeSnakeTail(enemySnake) {
+  if (enemySnake.segments.length < 2) return
+
+  var tailPose = getTreeSnakeTailRenderPose(enemySnake)
+  var treeSnakeRenderScale = renderScale * getTreeSnakeSizeScale(enemySnake)
+  var tailWidth = 52 * treeSnakeRenderScale
+  var tailHeight = 18 * treeSnakeRenderScale
+
+  ctx.save()
+  ctx.translate(tailPose.x, tailPose.y)
+  ctx.rotate(tailPose.angle)
+  ctx.globalAlpha = getTreeSnakeCrushAlpha(enemySnake)
+  ctx.drawImage(
+    treeSnakeTailImage,
+    -tailWidth / 2,
+    -tailHeight / 2,
+    tailWidth,
+    tailHeight
+  )
+
+  if (enemySnake.crushProgress > 0) {
+    drawTreeSnakeCrushOverlay(enemySnake.crushProgress, 10 * treeSnakeRenderScale, 5.5 * treeSnakeRenderScale)
+  }
+
+  ctx.restore()
+}
+
+function getTreeSnakeTailRenderPose(enemySnake) {
+  var tailIndex = Math.max(0, enemySnake.segments.length - 2)
+  var lastBodyPose = getTreeSnakeSegmentRenderPose(enemySnake, tailIndex)
+  var treeSnakeRenderScale = renderScale * getTreeSnakeSizeScale(enemySnake)
+  var bodyRearDistance = Math.max(7, 30 / 2 - 2) * treeSnakeRenderScale
+  var jointX = lastBodyPose.x - Math.cos(lastBodyPose.angle) * bodyRearDistance
+  var jointY = lastBodyPose.y - Math.sin(lastBodyPose.angle) * bodyRearDistance
+  var tailPoint = enemySnake.tailPoint || enemySnake.segments[enemySnake.segments.length - 1]
+  var tailAngle = Math.atan2(tailPoint.y - jointY, tailPoint.x - jointX)
+  if (!Number.isFinite(tailAngle)) tailAngle = enemySnake.heading
+  var tailCenterDistance = 23 * treeSnakeRenderScale
+
+  return {
+    x: jointX + Math.cos(tailAngle) * tailCenterDistance,
+    y: jointY + Math.sin(tailAngle) * tailCenterDistance,
+    angle: tailAngle,
+  }
+}
+
+function getTreeSnakeCrushAlpha(enemySnake) {
+  return 1 - (enemySnake.crushProgress || 0) * 0.18
+}
+
+function drawFallbackTreeSnakePredator(enemySnake) {
   for (var i = enemySnake.segments.length - 1; i >= 0; i--) {
     var segment = enemySnake.segments[i]
     var leader = i === 0 ? enemySnake.head : enemySnake.segments[i - 1]
@@ -29,11 +176,10 @@ function drawTreeSnakePredator(enemySnake) {
     false,
     enemySnake
   )
-
 }
 
 function drawTreeSnakePredatorSegment(posX, posY, angle, isHead, segmentIndex, isTail, enemySnake) {
-  var predatorScale = enemySnake.collisionScale || treeSnakeFixedScale
+  var predatorScale = enemySnake.collisionScale || getTreeSnakeStartScale()
   var crushProgress = enemySnake.crushProgress || 0
 
   ctx.save()

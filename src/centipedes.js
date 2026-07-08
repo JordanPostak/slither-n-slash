@@ -30,6 +30,9 @@ function createBadSnake() {
     cutCooldownUntil: 0,
     collisionScale: 1,
     segmentSpacingScale: 1,
+    slitherPhase: Math.random() * Math.PI * 2,
+    slitherDirection: Math.random() < 0.5 ? -1 : 1,
+    lastSlitherWaveAt: Date.now(),
     palette: { head: '#431b1f', body: '#7a2d32', stripe: '#ffb657' },
   }
 
@@ -45,16 +48,27 @@ function createTreeSnake() {
     head: { x: spawn.x, y: spawn.y },
     heading: spawn.heading,
     segments: [],
+    trail: [],
+    tailPoint: { x: spawn.x, y: spawn.y },
+    segmentGrowthProgress: [],
+    segmentGrowthStartedAt: [],
     wanderAngle: spawn.heading,
     nextWanderAt: 0,
     cutCooldownUntil: 0,
-    collisionScale: treeSnakeFixedScale,
-    segmentSpacingScale: treeSnakeSegmentSpacingScale,
+    collisionScale: getTreeSnakeStartScale(),
+    segmentSpacingScale: getTreeSnakeStartScale(),
+    slitherPhase: Math.random() * Math.PI * 2,
+    slitherDirection: Math.random() < 0.5 ? -1 : 1,
+    lastSlitherWaveAt: Date.now(),
+    slitherStartedAt: Date.now(),
   }
   var extraLength = Math.max(0, getPlayerProgressLength() - treeSnakeUnlockLength)
-  var lengthBonus = Math.floor(Math.log1p(extraLength) * 0.65)
+  var lengthBonus = Math.floor(Math.log1p(extraLength) * 1.8)
+  var startingSegments = Math.min(treeSnakeMaxSegments, treeSnakeStartSegments + lengthBonus)
 
-  addInitialPredatorSegments(enemySnake, treeSnakeStartSegments + lengthBonus)
+  refreshTreeSnakeScale(enemySnake, startingSegments)
+  addInitialPredatorSegments(enemySnake, startingSegments)
+  resetTreeSnakeBodyTrail(enemySnake)
   return enemySnake
 }
 
@@ -93,7 +107,7 @@ function getRandomPredatorEntry() {
 }
 
 function addInitialPredatorSegments(enemySnake, count) {
-  var spacing = segLength * (enemySnake.segmentSpacingScale || 1)
+  var spacing = getBadSnakeSegmentSpacing(enemySnake)
 
   for (var i = 0; i < count; i++) {
     enemySnake.segments.push({
@@ -308,9 +322,15 @@ function getPlayerSideAttackTarget(enemySnake) {
 }
 
 function dragBadSnakeSegments(enemySnake) {
+  if (enemySnake.species === 'tree-snake') {
+    recordBadSnakeHeadTrail(enemySnake)
+    updateTreeSnakeBodyFromTrail(enemySnake)
+    return
+  }
+
   var leadX = enemySnake.head.x
   var leadY = enemySnake.head.y
-  var enemySegLength = segLength * 0.94 * (enemySnake.segmentSpacingScale || 1)
+  var enemySegLength = getBadSnakeSegmentSpacing(enemySnake)
 
   for (var i = 0; i < enemySnake.segments.length; i++) {
     var segment = enemySnake.segments[i]
@@ -323,6 +343,353 @@ function dragBadSnakeSegments(enemySnake) {
     leadX = segment.x
     leadY = segment.y
   }
+
+  applyBadSnakeSpinalSlither(enemySnake)
+}
+
+function resetTreeSnakeBodyTrail(enemySnake) {
+  enemySnake.trail = []
+
+  var spacing = getBadSnakeSegmentSpacing(enemySnake)
+  var tailPadding = 30 * renderScale
+  var requiredLength = enemySnake.segments.length * spacing + getTreeSnakeTailFollowDistance(enemySnake) + tailPadding
+  var trailPoints = Math.max(2, Math.ceil(requiredLength / Math.max(1.5, 2.5 * renderScale)))
+
+  for (var i = trailPoints; i >= 0; i--) {
+    enemySnake.trail.push({
+      x: enemySnake.head.x - Math.cos(enemySnake.heading) * i * Math.max(1.5, 2.5 * renderScale),
+      y: enemySnake.head.y - Math.sin(enemySnake.heading) * i * Math.max(1.5, 2.5 * renderScale),
+    })
+  }
+
+  var initialTailPoint = enemySnake.segments[enemySnake.segments.length - 1] || enemySnake.head
+  enemySnake.tailPoint = { x: initialTailPoint.x, y: initialTailPoint.y }
+  updateTreeSnakeBodyFromTrail(enemySnake)
+}
+
+function recordBadSnakeHeadTrail(enemySnake) {
+  if (!enemySnake.trail || enemySnake.trail.length === 0) {
+    resetTreeSnakeBodyTrail(enemySnake)
+    return
+  }
+
+  var lastPoint = enemySnake.trail[enemySnake.trail.length - 1]
+  var deltaX = enemySnake.head.x - lastPoint.x
+  var deltaY = enemySnake.head.y - lastPoint.y
+  var distance = Math.hypot(deltaX, deltaY)
+
+  if (distance < 0.001) return
+
+  var maxPointSpacing = Math.max(1.5, 2.5 * renderScale)
+  var steps = Math.max(1, Math.ceil(distance / maxPointSpacing))
+
+  for (var step = 1; step <= steps; step++) {
+    var progress = step / steps
+    enemySnake.trail.push({
+      x: lastPoint.x + deltaX * progress,
+      y: lastPoint.y + deltaY * progress,
+    })
+  }
+
+  trimBadSnakeTrail(enemySnake)
+}
+
+function trimBadSnakeTrail(enemySnake) {
+  var spacing = getBadSnakeSegmentSpacing(enemySnake)
+  var requiredLength = enemySnake.segments.length * spacing + getTreeSnakeTailFollowDistance(enemySnake) + 30 * renderScale
+  var accumulatedLength = 0
+  var keepFromIndex = 0
+
+  for (var i = enemySnake.trail.length - 2; i >= 0; i--) {
+    var newerPoint = enemySnake.trail[i + 1]
+    var olderPoint = enemySnake.trail[i]
+    accumulatedLength += Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+    if (accumulatedLength >= requiredLength) {
+      keepFromIndex = i
+      break
+    }
+  }
+
+  if (keepFromIndex > 0) {
+    enemySnake.trail.splice(0, keepFromIndex)
+  }
+}
+
+function updateTreeSnakeBodyFromTrail(enemySnake, skipSlither) {
+  if (!enemySnake.trail || enemySnake.trail.length === 0) return
+
+  updateTreeSnakeSegmentGrowthProgress(enemySnake)
+
+  var newestPointIndex = enemySnake.trail.length - 1
+  var newerPoint = enemySnake.trail[newestPointIndex]
+  var olderPointIndex = newestPointIndex - 1
+  var accumulatedLength = 0
+
+  for (var segmentIndex = 0; segmentIndex <= enemySnake.segments.length; segmentIndex++) {
+    var isTailPoint = segmentIndex === enemySnake.segments.length
+    var targetDistance = getTreeSnakeSegmentTrailDistance(enemySnake, segmentIndex, isTailPoint)
+    var positionFound = false
+
+    while (olderPointIndex >= 0) {
+      var olderPoint = enemySnake.trail[olderPointIndex]
+      var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+      if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
+        var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
+        var sampledX = newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress
+        var sampledY = newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress
+
+        if (isTailPoint) {
+          enemySnake.tailPoint.x = sampledX
+          enemySnake.tailPoint.y = sampledY
+        } else {
+          enemySnake.segments[segmentIndex].x = sampledX
+          enemySnake.segments[segmentIndex].y = sampledY
+        }
+
+        positionFound = true
+        break
+      }
+
+      accumulatedLength += edgeLength
+      newerPoint = olderPoint
+      olderPointIndex--
+    }
+
+    if (!positionFound) {
+      var oldestPoint = enemySnake.trail[0]
+      if (isTailPoint) {
+        enemySnake.tailPoint.x = oldestPoint.x
+        enemySnake.tailPoint.y = oldestPoint.y
+      } else {
+        enemySnake.segments[segmentIndex].x = oldestPoint.x
+        enemySnake.segments[segmentIndex].y = oldestPoint.y
+      }
+    }
+  }
+
+  if (!skipSlither) applyBadSnakeSpinalSlither(enemySnake)
+}
+
+function getTreeSnakeSegmentTrailDistance(enemySnake, segmentIndex, isTailPoint) {
+  return getTreeSnakeSegmentTrailDistanceForLength(
+    enemySnake,
+    segmentIndex,
+    isTailPoint,
+    enemySnake.segments.length
+  )
+}
+
+function getTreeSnakeSegmentTrailDistanceForLength(enemySnake, segmentIndex, isTailPoint, segmentCount) {
+  var distance = 0
+  var maxSegmentIndex = isTailPoint ? segmentCount : segmentIndex + 1
+
+  for (var i = 0; i < maxSegmentIndex; i++) {
+    distance += getBadSnakeSegmentSpacing(enemySnake) * getTreeSnakeSegmentGrowthScale(enemySnake, i)
+  }
+
+  if (isTailPoint) {
+    return distance + getTreeSnakeTailFollowDistance(enemySnake)
+  }
+
+  return distance
+}
+
+function getTreeSnakeSegmentGrowthScale(enemySnake, segmentIndex) {
+  if (!enemySnake.segmentGrowthProgress) return 1
+
+  var progress = enemySnake.segmentGrowthProgress[segmentIndex]
+  if (progress === undefined) return 1
+
+  var easedProgress = progress * progress * (3 - 2 * progress)
+  return 0.18 + easedProgress * 0.82
+}
+
+function queueTreeSnakeSegmentGrowth(enemySnake, startIndex, count) {
+  if (!enemySnake.segmentGrowthProgress) enemySnake.segmentGrowthProgress = []
+  if (!enemySnake.segmentGrowthStartedAt) enemySnake.segmentGrowthStartedAt = []
+
+  var now = Date.now()
+
+  for (var i = 0; i < count; i++) {
+    var segmentIndex = startIndex + i
+    enemySnake.segmentGrowthProgress[segmentIndex] = 0
+    enemySnake.segmentGrowthStartedAt[segmentIndex] = now + i * snakeSegmentGrowthStagger
+  }
+}
+
+function updateTreeSnakeSegmentGrowthProgress(enemySnake) {
+  if (!enemySnake.segmentGrowthProgress) enemySnake.segmentGrowthProgress = []
+  if (!enemySnake.segmentGrowthStartedAt) enemySnake.segmentGrowthStartedAt = []
+
+  if (enemySnake.segmentGrowthProgress.length > enemySnake.segments.length) {
+    enemySnake.segmentGrowthProgress.splice(enemySnake.segments.length)
+    enemySnake.segmentGrowthStartedAt.splice(enemySnake.segments.length)
+  }
+
+  var now = Date.now()
+
+  for (var i = 0; i < enemySnake.segmentGrowthProgress.length; i++) {
+    if (enemySnake.segmentGrowthProgress[i] === undefined) continue
+
+    var startedAt = enemySnake.segmentGrowthStartedAt[i] || now
+    var progress = Math.max(0, Math.min(1, (now - startedAt) / snakeSegmentGrowthDuration))
+    enemySnake.segmentGrowthProgress[i] = progress
+
+    if (progress >= 1) {
+      enemySnake.segmentGrowthProgress[i] = undefined
+      enemySnake.segmentGrowthStartedAt[i] = undefined
+    }
+  }
+}
+
+function applyBadSnakeSpinalSlither(enemySnake) {
+  if (enemySnake.species !== 'tree-snake') return
+  if (enemySnake.segments.length === 0) return
+
+  var now = Date.now()
+  var elapsed = Math.max(0, Math.min(48, now - (enemySnake.lastSlitherWaveAt || now)))
+  enemySnake.lastSlitherWaveAt = now
+  enemySnake.slitherPhase = (enemySnake.slitherPhase || 0) + elapsed * regularSlitherSpeed
+
+  var waveAmplitude = Math.min(
+    12 * renderScale,
+    playerSegmentSpacing * regularSlitherAmplitude
+  ) * Math.max(0, 1 - (enemySnake.crushProgress || 0) * 0.7)
+  var slitherAge = now - (enemySnake.slitherStartedAt || now)
+  var warmupProgress = Math.max(0, Math.min(1, slitherAge / treeSnakeSlitherWarmupDuration))
+  waveAmplitude *= warmupProgress * warmupProgress * (3 - 2 * warmupProgress)
+
+  for (var waveIndex = 0; waveIndex < enemySnake.segments.length; waveIndex++) {
+    var waveSegment = enemySnake.segments[waveIndex]
+    var leader = waveIndex === 0 ? enemySnake.head : enemySnake.segments[waveIndex - 1]
+    var follower = waveIndex < enemySnake.segments.length - 1
+      ? enemySnake.segments[waveIndex + 1]
+      : waveSegment
+    var tangentX = leader.x - follower.x
+    var tangentY = leader.y - follower.y
+    var tangentLength = Math.hypot(tangentX, tangentY)
+
+    if (tangentLength <= 0.001) continue
+
+    var normalX = -tangentY / tangentLength
+    var normalY = tangentX / tangentLength
+    var headStability = Math.max(0, Math.min(1, (waveIndex - 1) / 5))
+    var wave = Math.sin(enemySnake.slitherPhase - waveIndex * regularSlitherPhase) *
+      waveAmplitude *
+      headStability *
+      (enemySnake.slitherDirection || 1)
+
+    waveSegment.x += normalX * wave
+    waveSegment.y += normalY * wave
+  }
+
+  constrainBadSnakeSegmentSpacing(enemySnake)
+}
+
+function constrainBadSnakeSegmentSpacing(enemySnake) {
+  var leadX = enemySnake.head.x
+  var leadY = enemySnake.head.y
+  var spacing = getBadSnakeSegmentSpacing(enemySnake)
+
+  for (var segmentIndex = 0; segmentIndex < enemySnake.segments.length; segmentIndex++) {
+    var segment = enemySnake.segments[segmentIndex]
+    var dx = segment.x - leadX
+    var dy = segment.y - leadY
+    var distance = Math.hypot(dx, dy)
+    var segmentSpacing = spacing * getTreeSnakeSegmentGrowthScale(enemySnake, segmentIndex)
+
+    if (distance > 0.001) {
+      segment.x = leadX + dx / distance * segmentSpacing
+      segment.y = leadY + dy / distance * segmentSpacing
+    }
+
+    leadX = segment.x
+    leadY = segment.y
+  }
+
+  if (enemySnake.tailPoint) {
+    var tailDx = enemySnake.tailPoint.x - leadX
+    var tailDy = enemySnake.tailPoint.y - leadY
+    var tailDistance = Math.hypot(tailDx, tailDy)
+    var tailSpacing = getTreeSnakeTailFollowDistance(enemySnake)
+
+    if (tailDistance > 0.001) {
+      enemySnake.tailPoint.x = leadX + tailDx / tailDistance * tailSpacing
+      enemySnake.tailPoint.y = leadY + tailDy / tailDistance * tailSpacing
+    }
+  }
+}
+
+function updateTreeSnakeTailPointFromSpine(enemySnake) {
+  if (!enemySnake.tailPoint || enemySnake.segments.length === 0) return
+
+  var lastSegmentIndex = enemySnake.segments.length - 1
+  var lastSegment = enemySnake.segments[lastSegmentIndex]
+  var previousSegment = lastSegmentIndex > 0
+    ? enemySnake.segments[lastSegmentIndex - 1]
+    : enemySnake.head
+  var tailAngle = Math.atan2(lastSegment.y - previousSegment.y, lastSegment.x - previousSegment.x)
+
+  if (!Number.isFinite(tailAngle)) tailAngle = enemySnake.heading + Math.PI
+
+  enemySnake.tailPoint.x = lastSegment.x + Math.cos(tailAngle) * getTreeSnakeTailFollowDistance(enemySnake)
+  enemySnake.tailPoint.y = lastSegment.y + Math.sin(tailAngle) * getTreeSnakeTailFollowDistance(enemySnake)
+}
+
+function getBadSnakeSegmentSpacing(enemySnake) {
+  if (enemySnake.species === 'tree-snake') {
+    return 19 * renderScale * getTreeSnakeSpacingScale(enemySnake)
+  }
+
+  return segLength * 0.94 * (enemySnake.segmentSpacingScale || 1)
+}
+
+function getTreeSnakeTailFollowDistance(enemySnake) {
+  return 39 * renderScale * getTreeSnakeSpacingScale(enemySnake)
+}
+
+function getTreeSnakeSpacingScale(enemySnake) {
+  return getTreeSnakeSpacingScaleForLength(getTreeSnakeScaleLength(enemySnake))
+}
+
+function getTreeSnakeSizeScale(enemySnake) {
+  return getTreeSnakeSizeScaleForLength(getTreeSnakeScaleLength(enemySnake))
+}
+
+function getTreeSnakeScaleLength(enemySnake) {
+  if (!enemySnake || enemySnake.species !== 'tree-snake') return treeSnakeStartSegments
+  return Math.max(treeSnakeStartSegments, Math.min(treeSnakeMaxSegments, enemySnake.segments.length || treeSnakeStartSegments))
+}
+
+function getTreeSnakeSpacingScaleForLength(segmentCount) {
+  var clampedSegmentCount = Math.max(treeSnakeStartSegments, Math.min(treeSnakeMaxSegments, segmentCount))
+  var growthRange = Math.max(1, treeSnakeMaxSegments - treeSnakeStartSegments)
+  var progress = (clampedSegmentCount - treeSnakeStartSegments) / growthRange
+  var startScale = getTreeSnakeStartScale()
+  var maxScale = getTreeSnakeMaxScale()
+  return startScale + (maxScale - startScale) * progress
+}
+
+function getTreeSnakeSizeScaleForLength(segmentCount) {
+  return getTreeSnakeSpacingScaleForLength(segmentCount)
+}
+
+function refreshTreeSnakeScale(enemySnake, segmentCountOverride) {
+  if (!enemySnake || enemySnake.species !== 'tree-snake') return
+
+  var segmentCount = segmentCountOverride || enemySnake.segments.length || treeSnakeStartSegments
+  enemySnake.segmentSpacingScale = getTreeSnakeSpacingScaleForLength(segmentCount)
+  enemySnake.collisionScale = getTreeSnakeSizeScaleForLength(segmentCount)
+}
+
+function getTreeSnakeStartScale() {
+  return getPlayerSizeScaleForScore(treeSnakeScaleMatchScore)
+}
+
+function getTreeSnakeMaxScale() {
+  return getPlayerSizeScaleForScore(treeSnakeMaxScaleScore)
 }
 
 function handleBadSnakeFood(enemySnake) {
@@ -342,15 +709,126 @@ function handleBadSnakeFood(enemySnake) {
 
 function growBadSnake(enemySnake, count) {
   var tail = enemySnake.segments[enemySnake.segments.length - 1] || enemySnake.head
+  var maxGrowthCount = count
 
-  for (var i = 0; i < count; i++) {
+  if (enemySnake.species === 'tree-snake') {
+    maxGrowthCount = Math.max(0, Math.min(count, treeSnakeMaxSegments - enemySnake.segments.length))
+    addTreeSnakeSegmentsFromTrail(enemySnake, maxGrowthCount)
+    return
+  }
+
+  for (var i = 0; i < maxGrowthCount; i++) {
     enemySnake.segments.push({ x: tail.x, y: tail.y })
   }
 }
 
+function addTreeSnakeSegmentsFromTrail(enemySnake, count) {
+  if (count <= 0) return
+
+  var previousSegmentCount = enemySnake.segments.length
+
+  for (var i = 0; i < count; i++) {
+    var tail = enemySnake.segments[enemySnake.segments.length - 1] || enemySnake.head
+    enemySnake.segments.push({ x: tail.x, y: tail.y })
+  }
+
+  queueTreeSnakeSegmentGrowth(enemySnake, previousSegmentCount, count)
+  refreshTreeSnakeScale(enemySnake)
+  repairTreeSnakeSpineFromTrail(enemySnake)
+}
+
+function repairTreeSnakeAfterSegmentLoss(enemySnake) {
+  if (!enemySnake || enemySnake.species !== 'tree-snake') return
+  if (!enemySnake.segments.length) return
+
+  refreshTreeSnakeScale(enemySnake)
+  updateTreeSnakeSegmentGrowthProgress(enemySnake)
+  repairTreeSnakeSpineFromTrail(enemySnake)
+}
+
+function repairTreeSnakeSpineFromTrail(enemySnake) {
+  ensureTreeSnakeTrailLength(enemySnake)
+  trimBadSnakeTrail(enemySnake)
+  updateTreeSnakeBodyFromTrail(enemySnake, true)
+  lockTreeSnakeFrontAnchor(enemySnake)
+}
+
+function lockTreeSnakeFrontAnchor(enemySnake) {
+  if (!enemySnake || enemySnake.species !== 'tree-snake' || enemySnake.segments.length === 0) return
+
+  var spacing = getBadSnakeSegmentSpacing(enemySnake)
+  enemySnake.segments[0].x = enemySnake.head.x - Math.cos(enemySnake.heading) * spacing
+  enemySnake.segments[0].y = enemySnake.head.y - Math.sin(enemySnake.heading) * spacing
+}
+
+function ensureTreeSnakeTrailLength(enemySnake) {
+  if (!enemySnake.trail || enemySnake.trail.length === 0) {
+    resetTreeSnakeBodyTrail(enemySnake)
+    return
+  }
+
+  var requiredLength = enemySnake.segments.length * getBadSnakeSegmentSpacing(enemySnake) +
+    getTreeSnakeTailFollowDistance(enemySnake) +
+    30 * renderScale
+  var currentLength = getBadSnakeTrailLength(enemySnake)
+  var oldestPoint = enemySnake.trail[0]
+  var nextPoint = enemySnake.trail[1] || enemySnake.head
+  var backAngle = Math.atan2(oldestPoint.y - nextPoint.y, oldestPoint.x - nextPoint.x)
+
+  if (!Number.isFinite(backAngle)) backAngle = enemySnake.heading + Math.PI
+
+  while (currentLength < requiredLength) {
+    var spacing = Math.max(1.5, 2.5 * renderScale)
+    enemySnake.trail.unshift({
+      x: enemySnake.trail[0].x + Math.cos(backAngle) * spacing,
+      y: enemySnake.trail[0].y + Math.sin(backAngle) * spacing,
+    })
+    currentLength += spacing
+  }
+}
+
+function getBadSnakeTrailLength(enemySnake) {
+  var trailLength = 0
+
+  for (var i = 1; i < enemySnake.trail.length; i++) {
+    trailLength += Math.hypot(
+      enemySnake.trail[i].x - enemySnake.trail[i - 1].x,
+      enemySnake.trail[i].y - enemySnake.trail[i - 1].y
+    )
+  }
+
+  return trailLength
+}
+
+function sampleBadSnakeTrailAtDistance(enemySnake, targetDistance) {
+  if (!enemySnake.trail || enemySnake.trail.length === 0) return undefined
+
+  var newestPointIndex = enemySnake.trail.length - 1
+  var newerPoint = enemySnake.trail[newestPointIndex]
+  var accumulatedLength = 0
+
+  for (var olderPointIndex = newestPointIndex - 1; olderPointIndex >= 0; olderPointIndex--) {
+    var olderPoint = enemySnake.trail[olderPointIndex]
+    var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+    if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
+      var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
+      return {
+        x: newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress,
+        y: newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress,
+      }
+    }
+
+    accumulatedLength += edgeLength
+    newerPoint = olderPoint
+  }
+
+  return enemySnake.trail[0]
+}
+
 function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   var now = Date.now()
-  var headCollisionScale = Math.max(getPlayerSizeScale(), enemySnake.collisionScale || 1)
+  var headCollisionScale = Math.max(getPlayerSizeScale(), Math.sqrt(enemySnake.collisionScale || 1))
   var enclosingTrapLoop = getBadSnakeTrapLoop(enemySnake, snakeTrapLoops)
   var centipedeIsTrapped = Boolean(enclosingTrapLoop)
   enemySnake.isTrapped = centipedeIsTrapped
@@ -454,13 +932,25 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     if (playerHitIndex >= 0) {
       bounceBadSnakeOffPlayer(enemySnake, x[playerHitIndex], y[playerHitIndex])
     } else if (enemyHitIndex >= 0) {
-      bouncePlayerOffBadSnake(
-        enemySnake.segments[enemyHitIndex].x,
-        enemySnake.segments[enemyHitIndex].y,
-        enemySnake.collisionScale
-      )
+      if (enemySnake.species === 'tree-snake') {
+        slidePlayerOffBadSnake(
+          enemySnake.segments[enemyHitIndex].x,
+          enemySnake.segments[enemyHitIndex].y,
+          enemySnake.collisionScale
+        )
+      } else {
+        bouncePlayerOffBadSnake(
+          enemySnake.segments[enemyHitIndex].x,
+          enemySnake.segments[enemyHitIndex].y,
+          enemySnake.collisionScale
+        )
+      }
     } else if (headsColliding) {
-      bounceSnakeHeadsApart(enemySnake)
+      if (enemySnake.species === 'tree-snake') {
+        slideSnakeHeadsApart(enemySnake)
+      } else {
+        bounceSnakeHeadsApart(enemySnake)
+      }
     }
     return
   }
@@ -489,7 +979,11 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     addPlayerSegments(recoveredSegments)
 
     if (badSnakes.indexOf(enemySnake) !== -1) {
-      bouncePlayerOffBadSnake(enemyContactX, enemyContactY, enemySnake.collisionScale)
+      if (enemySnake.species === 'tree-snake') {
+        slidePlayerOffBadSnake(enemyContactX, enemyContactY, enemySnake.collisionScale)
+      } else {
+        bouncePlayerOffBadSnake(enemyContactX, enemyContactY, enemySnake.collisionScale)
+      }
       enemySnake.cutCooldownUntil = now + snakeCutCooldown
     }
 
@@ -498,7 +992,11 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
   }
 
   if (headsColliding) {
-    bounceSnakeHeadsApart(enemySnake)
+    if (enemySnake.species === 'tree-snake') {
+      slideSnakeHeadsApart(enemySnake)
+    } else {
+      bounceSnakeHeadsApart(enemySnake)
+    }
   }
 }
 

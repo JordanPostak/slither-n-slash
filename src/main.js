@@ -40,6 +40,31 @@ function loadPlayerSnakeSkin(skinNumber) {
   })
 }
 
+function loadTreeSnakeSkin(skinNumber) {
+  var resolvedSkinNumber = snakeSkinConfigs[Number(skinNumber)] ? Number(skinNumber) : 1
+  var config = snakeSkinConfigs[resolvedSkinNumber]
+  var basePath = './assets/' + config.folder + '/' + config.prefix
+  var skinImages = []
+
+  treeSnakeSkinNumber = resolvedSkinNumber
+  treeSnakeHeadImage = new Image()
+  treeSnakeTailImage = new Image()
+  treeSnakeBodyImages = []
+
+  treeSnakeHeadImage.src = basePath + '-head.png'
+  treeSnakeTailImage.src = basePath + '-tail.png'
+  skinImages.push(treeSnakeHeadImage, treeSnakeTailImage)
+
+  for (var bodyIndex = 1; bodyIndex <= config.bodyCount; bodyIndex++) {
+    var bodyImage = new Image()
+    bodyImage.src = basePath + '-body' + bodyIndex + '.png'
+    treeSnakeBodyImages.push(bodyImage)
+    skinImages.push(bodyImage)
+  }
+
+  return Promise.all(skinImages.map(waitForPlayerSkinImage))
+}
+
 function waitForPlayerSkinImage(image) {
   if (image.complete) return Promise.resolve()
 
@@ -60,6 +85,7 @@ function getSavedPlayerSnakeSkin() {
 
 selectedSnakeSkin = getSavedPlayerSnakeSkin()
 loadPlayerSnakeSkin(selectedSnakeSkin)
+loadTreeSnakeSkin(treeSnakeSkinNumber)
 highScore = getHighScore()
 
 canvas = document.getElementById('myCanvas')

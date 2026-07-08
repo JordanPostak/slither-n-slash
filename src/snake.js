@@ -59,14 +59,27 @@ function getPlayerSizeScale() {
   // The canvas expands as the arena grows, which visually zooms the world out.
   // Counter-scale the player, then add a gentle visible thickness increase so
   // a very long snake still looks substantial without overwhelming the arena.
-  var extraSegments = Math.max(0, getPlayerProgressLength() - startingSegments)
+  return getPlayerSizeScaleForProgressLength(getPlayerProgressLength())
+}
+
+function getPlayerSizeScaleForScore(nextScore) {
+  return getPlayerSizeScaleForProgressLength(getPlayerProgressLengthForScore(nextScore))
+}
+
+function getPlayerSizeScaleForProgressLength(progressLength) {
+  var extraSegments = Math.max(0, progressLength - startingSegments)
   var visibleThicknessGrowth = 1 + Math.log1p(extraSegments) * 0.025
-  return getArenaExpansionScale() * visibleThicknessGrowth
+  return getArenaExpansionScaleForProgressLength(progressLength) * visibleThicknessGrowth
 }
 
 function getArenaExpansionScale() {
-  var extraSegments = Math.max(0, getPlayerProgressLength() - startingSegments)
-  return 1 + Math.log1p(extraSegments) * 0.18
+  return getArenaExpansionScaleForProgressLength(getPlayerProgressLength())
+}
+
+function getArenaExpansionScaleForProgressLength(progressLength) {
+  var extraSegments = Math.max(0, progressLength - startingSegments)
+  var growthSteps = extraSegments / Math.max(1, arenaExpansionStepSegments)
+  return Math.pow(1 + arenaExpansionPercentPerStep, growthSteps)
 }
 
 function getPlayerTurnRate() {
@@ -79,7 +92,7 @@ function getPlayerSpeedScale() {
 }
 
 function getCoilSlashSCurveSegmentCount() {
-  return Math.max(4, Math.floor(n * 0.34))
+  return Math.max(3, Math.floor(n * 0.5))
 }
 
 function drawCoilSlashPreview() {
@@ -738,8 +751,9 @@ function constrainRegularSnakeSegmentSpacing() {
     var distance = Math.hypot(dx, dy)
 
     if (distance > 0.001) {
-      x[segmentIndex] = leadX + dx / distance * playerSegmentSpacing
-      y[segmentIndex] = leadY + dy / distance * playerSegmentSpacing
+      var segmentSpacing = playerSegmentSpacing * getSnakeSegmentGrowthScale(segmentIndex)
+      x[segmentIndex] = leadX + dx / distance * segmentSpacing
+      y[segmentIndex] = leadY + dy / distance * segmentSpacing
     }
 
     leadX = x[segmentIndex]
@@ -769,74 +783,43 @@ function updateSnakeBodyForCoilSlash() {
   x.length = n
   y.length = n
 
-  var playerSizeScale = getPlayerSizeScale()
   var charge = Math.max(0, Math.min(1, coilSlashChargeProgress))
   var forwardX = Math.cos(headingAngle)
   var forwardY = Math.sin(headingAngle)
   var sideX = -forwardY
   var sideY = forwardX
-  var pivotRadius = getCoilSlashLoopRadius()
-  var entryLoopSegments = Math.max(
-    4,
-    Math.min(n, Math.ceil(Math.PI * 2 * pivotRadius / Math.max(1, playerSegmentSpacing)))
-  )
-  var innerCoilStartIndex = Math.min(n, entryLoopSegments)
-  var innerCoilSegments = Math.max(1, n - innerCoilStartIndex)
-  var hasCoilPivot = coilSlashPivotX !== 0 || coilSlashPivotY !== 0
-  var circleCenterX = hasCoilPivot
-    ? coilSlashPivotX
-    : snakeHead.x - forwardX * getCoilSlashHeadAnchorDistance()
-  var circleCenterY = hasCoilPivot
-    ? coilSlashPivotY
-    : snakeHead.y - forwardY * getCoilSlashHeadAnchorDistance()
-  var circleStep = playerSegmentSpacing / pivotRadius
-  var innerTurns = 1.15
-  var spin = feedDistance / Math.max(1, playerSegmentSpacing) * 0.22
-  var maxLoadedSegments = Math.min(n + 1, charge * (n + 1))
+  var springSegments = Math.min(n, getCoilSlashSCurveSegmentCount())
+  var maxLoadedSegments = Math.min(springSegments + 1, charge * (springSegments + 1))
+  var springLength = Math.max(playerSegmentSpacing, springSegments * playerSegmentSpacing)
+  var springAmplitude = playerSegmentSpacing * (0.85 + charge * 0.35)
+  var springWaves = 2.15
 
   for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
-    var targetX
-    var targetY
-
-    if (segmentIndex < innerCoilStartIndex) {
-      // This is the same turn-radius loop the head just traveled through.
-      // Body sections enter the coil by following this exact outer path from
-      // the head backward instead of jumping into a separate generated shape.
-      var circleAngle = -coilSlashEntryDirection * ((segmentIndex + 1) * circleStep)
-      var loopRadius = pivotRadius
-      targetX = circleCenterX + forwardX * Math.cos(circleAngle) * loopRadius + sideX * Math.sin(circleAngle) * loopRadius
-      targetY = circleCenterY + forwardY * Math.cos(circleAngle) * loopRadius + sideY * Math.sin(circleAngle) * loopRadius
-    } else {
-      // After the circle is established, the rest of the body feeds through
-      // that pivot and coils inside it. The loaded part rotates like a wheel;
-      // unloaded sections still use their natural trail below.
-      var coilIndex = segmentIndex - innerCoilStartIndex
-      var coilProgress = coilIndex / Math.max(1, innerCoilSegments - 1)
-      var loadBlend = Math.max(0, Math.min(1, maxLoadedSegments - segmentIndex))
-      var coilAngle = Math.PI * 2 + coilProgress * Math.PI * 2 * innerTurns * coilSlashEntryDirection + spin * loadBlend
-      var ringRadius = pivotRadius * (0.84 - coilProgress * 0.38)
-
-      targetX = circleCenterX + forwardX * Math.cos(coilAngle) * ringRadius + sideX * Math.sin(coilAngle) * ringRadius
-      targetY = circleCenterY + forwardY * Math.cos(coilAngle) * ringRadius + sideY * Math.sin(coilAngle) * ringRadius
-    }
-
     var loadBlend = Math.max(0, Math.min(1, maxLoadedSegments - segmentIndex))
     var naturalX = normalBody.x[segmentIndex]
     var naturalY = normalBody.y[segmentIndex]
 
-    x[segmentIndex] = naturalX + (targetX - naturalX) * loadBlend
-    y[segmentIndex] = naturalY + (targetY - naturalY) * loadBlend
+    if (segmentIndex < springSegments) {
+      var springProgress = (segmentIndex + 1) / Math.max(1, springSegments)
+      var along = springProgress * springLength
+      var waveFade = Math.sin(springProgress * Math.PI)
+      var sideOffset = Math.sin(springProgress * Math.PI * springWaves) *
+        springAmplitude *
+        waveFade *
+        coilSlashEntryDirection
+      var targetX = snakeHead.x - forwardX * along + sideX * sideOffset
+      var targetY = snakeHead.y - forwardY * along + sideY * sideOffset
+
+      x[segmentIndex] = naturalX + (targetX - naturalX) * loadBlend
+      y[segmentIndex] = naturalY + (targetY - naturalY) * loadBlend
+    } else {
+      x[segmentIndex] = naturalX
+      y[segmentIndex] = naturalY
+    }
   }
 
-  var tailBlend = Math.max(0, Math.min(1, maxLoadedSegments - n))
-  var tailLoopProgress = 1
-  var tailAngle = Math.PI * 2 + tailLoopProgress * Math.PI * 2 * innerTurns * coilSlashEntryDirection + spin * tailBlend
-  var tailRingRadius = pivotRadius * (0.84 - tailLoopProgress * 0.38)
-  var targetTailX = circleCenterX + forwardX * Math.cos(tailAngle) * tailRingRadius + sideX * Math.sin(tailAngle) * tailRingRadius
-  var targetTailY = circleCenterY + forwardY * Math.cos(tailAngle) * tailRingRadius + sideY * Math.sin(tailAngle) * tailRingRadius
-
-  snakeTailPoint.x = normalBody.tailX + (targetTailX - normalBody.tailX) * tailBlend
-  snakeTailPoint.y = normalBody.tailY + (targetTailY - normalBody.tailY) * tailBlend
+  snakeTailPoint.x = normalBody.tailX
+  snakeTailPoint.y = normalBody.tailY
 
   applySnakeCornerCut(normalBody.x, normalBody.y)
   constrainCoilSlashSegmentSpacing()

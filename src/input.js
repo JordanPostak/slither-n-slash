@@ -24,9 +24,9 @@ function resizeCanvas() {
   arenaCornerRadius = getArenaCornerRadius()
   snakeBodyBounceRadius = 18 * renderScale
   swallowRadius = 24 * renderScale
-  var baseRockSize = parseFloat(window.getComputedStyle(gameStage).getPropertyValue('--arena-rock-size')) || 420
+  var baseArenaTileSize = parseFloat(window.getComputedStyle(gameStage).getPropertyValue('--arena-tile-size')) || 420
   gameStage.style.setProperty('--arena-corner-radius', arenaCornerRadius / arenaExpansionScale + 'px')
-  gameStage.style.setProperty('--arena-rock-tile-size', baseRockSize / arenaExpansionScale + 'px')
+  gameStage.style.setProperty('--arena-background-tile-size', baseArenaTileSize / arenaExpansionScale + 'px')
   nextSnakeTrapScanAt = 0
 }
 

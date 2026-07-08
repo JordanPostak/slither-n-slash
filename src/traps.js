@@ -229,10 +229,14 @@ function bounceBadSnakeOffPlayer(enemySnake, contactX, contactY) {
     enemySnake.heading
   )
   var predatorScale = enemySnake.collisionScale || 1
-  var separation = 24 * renderScale * predatorScale
+  var effectiveScale = Math.sqrt(predatorScale)
+  var separation = 22 * renderScale * effectiveScale
   var distance = Math.hypot(enemySnake.head.x - contactX, enemySnake.head.y - contactY)
-  var pushDistance = Math.max(2 * renderScale * predatorScale, Math.min(9 * renderScale * predatorScale, (separation - distance) * 0.5))
-  var softHeading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 4)
+  var pushDistance = Math.max(
+    1.5 * renderScale,
+    Math.min(6 * renderScale * effectiveScale, (separation - distance) * 0.32)
+  )
+  var softHeading = getSoftCollisionHeading(enemySnake.heading, normal.x, normal.y, badSnakeTurnRate * 2.4)
 
   moveBadSnake(enemySnake, normal.x * pushDistance, normal.y * pushDistance)
   enemySnake.heading = softHeading
