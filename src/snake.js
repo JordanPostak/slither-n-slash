@@ -628,6 +628,76 @@ function updateSnakeBodyFromTrail(skipCornerCut) {
   }
 
   if (!skipCornerCut) applySnakeCornerCut(previousX, previousY)
+  applyRegularSnakeSlither()
+}
+
+function applyRegularSnakeSlither() {
+  if (x.length === 0) return
+  if (isCoilSlashCharging() || isCoilSlashStriking()) return
+  if (document.body.classList.contains('reduce-effects')) {
+    constrainRegularSnakeSegmentSpacing()
+    return
+  }
+
+  var playerSizeScale = getPlayerSizeScale()
+  var boostSlitherMultiplier = boosting ? boostSlitherAmplitudeMultiplier : 1
+  var slitherSpeedMultiplier = boosting ? boostSlitherSpeedMultiplier : 1
+  var waveTime = Date.now() * regularSlitherSpeed * slitherSpeedMultiplier
+  var waveAmplitude = Math.min(
+    12 * renderScale * playerSizeScale * boostSlitherMultiplier,
+    playerSegmentSpacing * regularSlitherAmplitude * boostSlitherMultiplier
+  )
+
+  for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex++) {
+    var leaderX = segmentIndex === 0 ? snakeHead.x : x[segmentIndex - 1]
+    var leaderY = segmentIndex === 0 ? snakeHead.y : y[segmentIndex - 1]
+    var followerX = segmentIndex < x.length - 1 ? x[segmentIndex + 1] : snakeTailPoint.x
+    var followerY = segmentIndex < y.length - 1 ? y[segmentIndex + 1] : snakeTailPoint.y
+    var tangentX = leaderX - followerX
+    var tangentY = leaderY - followerY
+    var tangentLength = Math.hypot(tangentX, tangentY)
+
+    if (tangentLength <= 0.001) continue
+
+    var normalX = -tangentY / tangentLength
+    var normalY = tangentX / tangentLength
+    var headStability = Math.min(1, (segmentIndex + 1) / 4)
+    var wave = Math.sin(waveTime - segmentIndex * regularSlitherPhase) * waveAmplitude * headStability
+
+    x[segmentIndex] += normalX * wave
+    y[segmentIndex] += normalY * wave
+  }
+
+  constrainRegularSnakeSegmentSpacing()
+}
+
+function constrainRegularSnakeSegmentSpacing() {
+  var leadX = snakeHead.x
+  var leadY = snakeHead.y
+
+  for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex++) {
+    var dx = x[segmentIndex] - leadX
+    var dy = y[segmentIndex] - leadY
+    var distance = Math.hypot(dx, dy)
+
+    if (distance > 0.001) {
+      x[segmentIndex] = leadX + dx / distance * playerSegmentSpacing
+      y[segmentIndex] = leadY + dy / distance * playerSegmentSpacing
+    }
+
+    leadX = x[segmentIndex]
+    leadY = y[segmentIndex]
+  }
+
+  var tailDx = snakeTailPoint.x - leadX
+  var tailDy = snakeTailPoint.y - leadY
+  var tailDistance = Math.hypot(tailDx, tailDy)
+  var tailSpacing = getSnakeTailFollowDistance()
+
+  if (tailDistance > 0.001) {
+    snakeTailPoint.x = leadX + tailDx / tailDistance * tailSpacing
+    snakeTailPoint.y = leadY + tailDy / tailDistance * tailSpacing
+  }
 }
 
 function updateSnakeBodyForCoilSlash() {

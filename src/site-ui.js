@@ -1,6 +1,9 @@
 // Landing-page navigation, play mode, settings, and adjustable mobile controls.
 
 var snakeSkinPreviewAnimationId = 0
+var snakePickerTongueNextFlickAt = 0
+var snakePickerTongueFlickStartedAt = 0
+var snakePickerTongueDoubleFlick = false
 
 function handlePrimaryGameToggle() {
   if (!document.body.classList.contains('is-game-mode')) {
@@ -284,6 +287,7 @@ function updateSnakeSkinPreviewSpines(timestamp) {
     var preview = previews[previewIndex]
     var option = preview.closest('.snake-skin-option')
     var pieces = Array.from(preview.querySelectorAll('img'))
+    var pickerTongue = getSnakePickerTongue(preview)
     if (!option || pieces.length === 0 || preview.clientWidth <= 0 || preview.clientHeight <= 0) continue
 
     var isSelected = option.classList.contains('is-selected')
@@ -331,6 +335,10 @@ function updateSnakeSkinPreviewSpines(timestamp) {
       piece.style.transform = 'translate(' + frontX.toFixed(2) + 'px, ' +
         (frontY - pieceHeight / 2).toFixed(2) + 'px) rotate(' + angle.toFixed(4) + 'rad)'
 
+      if (isHeadPiece) {
+        updateSnakePickerTongue(pickerTongue, preview, frontX, angle, shouldAnimate, animationTime)
+      }
+
       if (!isLastPiece) {
         if (isHeadPiece) {
           jointX = frontX + Math.cos(angle) * pieceWidth * 0.88
@@ -342,6 +350,58 @@ function updateSnakeSkinPreviewSpines(timestamp) {
       }
     }
   }
+}
+
+function getSnakePickerTongue(preview) {
+  var tongue = preview.querySelector('.snake-picker-tongue')
+  if (tongue) return tongue
+
+  tongue = document.createElement('span')
+  tongue.className = 'snake-picker-tongue'
+  tongue.setAttribute('aria-hidden', 'true')
+  tongue.innerHTML = '<i class="tongue-main"></i><i class="tongue-fork-one"></i><i class="tongue-fork-two"></i>'
+  preview.appendChild(tongue)
+  return tongue
+}
+
+function updateSnakePickerTongue(tongue, preview, headX, headAngle, shouldAnimate, animationTime) {
+  if (!tongue) return
+
+  var flickProgress = 0
+
+  if (shouldAnimate) {
+    if (!snakePickerTongueNextFlickAt) {
+      snakePickerTongueNextFlickAt = animationTime + 300 + Math.random() * 900
+    }
+
+    if (!snakePickerTongueFlickStartedAt && animationTime >= snakePickerTongueNextFlickAt) {
+      snakePickerTongueFlickStartedAt = animationTime
+      snakePickerTongueDoubleFlick = Math.random() < 0.34
+    }
+
+    if (snakePickerTongueFlickStartedAt) {
+      var flickAge = animationTime - snakePickerTongueFlickStartedAt
+      var flickDuration = snakePickerTongueDoubleFlick ? 620 : 330
+      var flickPhase = snakePickerTongueDoubleFlick && flickAge > 300 ? flickAge - 300 : flickAge
+
+      if (flickAge <= flickDuration && flickPhase <= 300) {
+        flickProgress = Math.sin(flickPhase / 300 * Math.PI)
+      } else if (flickAge > flickDuration) {
+        snakePickerTongueFlickStartedAt = 0
+        snakePickerTongueNextFlickAt = animationTime + 450 + Math.random() * 1500
+      }
+    }
+  }
+
+  var tongueWidth = 24
+  var noseX = headX
+  var noseY = preview.clientHeight / 2 + 8
+  var scaleX = 0.45 + flickProgress * 0.75
+
+  tongue.style.left = (noseX - tongueWidth + 6).toFixed(2) + 'px'
+  tongue.style.top = (noseY - 7).toFixed(2) + 'px'
+  tongue.style.opacity = flickProgress > 0.02 ? String(Math.min(1, flickProgress * 1.35)) : '0'
+  tongue.style.transform = 'rotate(' + headAngle.toFixed(4) + 'rad) scaleX(' + scaleX.toFixed(3) + ')'
 }
 
 function showSnakeSelection() {

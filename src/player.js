@@ -41,33 +41,44 @@ function moveSnakeHead() {
 
   var currentSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
   if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
+  if (boosting) currentSpeed *= boostMultiplier
 
   snakeHead.x += Math.cos(headingAngle) * currentSpeed
   snakeHead.y += Math.sin(headingAngle) * currentSpeed
 
-  if (snakeHead.x < 0) {
-    snakeHead.x = 0
-    headingAngle = Math.PI - headingAngle
-  }
-
-  if (snakeHead.x > canvas.width) {
-    snakeHead.x = canvas.width
-    headingAngle = Math.PI - headingAngle
-  }
-
-  if (snakeHead.y < 0) {
-    snakeHead.y = 0
-    headingAngle = -headingAngle
-  }
-
-  if (snakeHead.y > canvas.height) {
-    snakeHead.y = canvas.height
-    headingAngle = -headingAngle
-  }
+  softenPlayerWallTurn(currentTurnRate)
 
   applyRoundedSnakeBounds()
   recordSnakeHeadTrail()
   updateSnakeBodyFromTrail()
+}
+
+function softenPlayerWallTurn(currentTurnRate) {
+  var wallTurnRate = currentTurnRate * 2.4
+
+  if (snakeHead.x < 0) {
+    snakeHead.x = 0
+    headingAngle = getSoftWallHeading(headingAngle, 1, 0, wallTurnRate)
+  }
+
+  if (snakeHead.x > canvas.width) {
+    snakeHead.x = canvas.width
+    headingAngle = getSoftWallHeading(headingAngle, -1, 0, wallTurnRate)
+  }
+
+  if (snakeHead.y < 0) {
+    snakeHead.y = 0
+    headingAngle = getSoftWallHeading(headingAngle, 0, 1, wallTurnRate)
+  }
+
+  if (snakeHead.y > canvas.height) {
+    snakeHead.y = canvas.height
+    headingAngle = getSoftWallHeading(headingAngle, 0, -1, wallTurnRate)
+  }
+}
+
+function getSoftWallHeading(incomingHeading, normalX, normalY, maxTurn) {
+  return getSoftCollisionHeading(incomingHeading, normalX, normalY, maxTurn)
 }
 
 function applyKeyboardControls(currentTurnRate) {
@@ -101,6 +112,7 @@ function updateBoostEnergy() {
   var elapsed = now - lastBoostUpdateAt
   var maxEnergy = getBoostDuration()
   var boostHeld = isBoostControlActive()
+  var coilHeld = isCoilSlashControlActive()
 
   lastBoostUpdateAt = now
 
@@ -108,13 +120,14 @@ function updateBoostEnergy() {
     boostEnergy = maxEnergy
   }
 
-  if (boostHeld && !isCoilSlashStriking()) {
+  if (coilHeld && !isCoilSlashStriking()) {
     if (boostEnergy > 0 || isCoilSlashCharging()) {
       if (!isCoilSlashCharging()) {
         startCoilSlashEntry(now)
       }
 
-      setBoosting(true)
+      setBoosting(false)
+      setCoilSlashCharging(true)
       coilSlashChargeProgress = getCoilSlashChargeProgress(now)
       boostEnergy = Math.max(0, maxEnergy * (1 - coilSlashChargeProgress))
     }
@@ -123,12 +136,19 @@ function updateBoostEnergy() {
       releaseCoilSlash()
     }
 
-    if (!isCoilSlashStriking()) {
+    if (boostHeld && !isCoilSlashStriking() && boostEnergy > 0) {
+      setBoosting(true)
+      boostEnergy = Math.max(0, boostEnergy - elapsed)
+    } else {
+      setBoosting(false)
+    }
+
+    if (!boostHeld && !isCoilSlashStriking()) {
       boostEnergy = Math.min(maxEnergy, boostEnergy + getBoostRechargeRate() * elapsed)
     }
   }
 
-  boostCoolingDown = !boosting && boostEnergy < maxEnergy
+  boostCoolingDown = !boosting && !isCoilSlashCharging() && boostEnergy < maxEnergy
 }
 
 function getBoostRechargeRate() {
@@ -143,9 +163,18 @@ function isBoostControlActive() {
     pressedKeys.w ||
     pressedKeys.W ||
     touchBoosting ||
-    boostTouchActive ||
+    (boostTouchActive && !mobileCoilSlashActive) ||
     mobileControls.boost ||
     gamepadBoosting
+  )
+}
+
+function isCoilSlashControlActive() {
+  return Boolean(
+    pressedKeys.ArrowDown ||
+    pressedKeys.s ||
+    pressedKeys.S ||
+    mobileCoilSlashActive
   )
 }
 
@@ -166,10 +195,12 @@ function resetBoost() {
   coilSlashStrikeDistanceRemaining = 0
   coilSlashStrikeDistanceTotal = 0
   coilSlashStrikeCharge = 0
+  mobileCoilSlashActive = false
   touchBoosting = false
   releaseMobileControls()
   lastBoostUpdateAt = Date.now()
   setBoosting(false)
+  setCoilSlashCharging(false)
   updateBoostMeterStatus(true)
 }
 
@@ -178,12 +209,19 @@ function setBoosting(nextBoosting) {
 
   boosting = nextBoosting
   document.body.classList.toggle('is-boosting', boosting)
-  document.body.classList.toggle('is-coil-slashing', boosting)
+  updateBoostMeterStatus(true)
+}
+
+function setCoilSlashCharging(nextCharging) {
+  if (coilSlashCharging === nextCharging) return
+
+  coilSlashCharging = nextCharging
+  document.body.classList.toggle('is-coil-slashing', coilSlashCharging)
   updateBoostMeterStatus(true)
 }
 
 function isCoilSlashCharging() {
-  return boosting
+  return coilSlashCharging
 }
 
 function isCoilSlashStriking() {
@@ -365,7 +403,7 @@ function releaseCoilSlash() {
     ? Math.max(coilSlashChargeProgress, coilSlashMinChargeToStrike)
     : coilSlashChargeProgress
 
-  setBoosting(false)
+  setCoilSlashCharging(false)
   coilSlashChargeProgress = 0
   coilSlashHoldStartedAt = 0
   coilSlashEntryStartedAt = 0
@@ -403,18 +441,26 @@ function updateBoostMeterStatus(forceUpdate) {
   var maxEnergy = getBoostDuration()
   var boostProgress = boostEnergy / maxEnergy
   var boostHeld = isBoostControlActive()
+  var coilHeld = isCoilSlashControlActive()
   var boostState = 'ready'
 
   updateBoostCapacityDisplay(maxEnergy)
 
-  if (boosting) {
+  if (isCoilSlashCharging()) {
     boostState = 'active'
     updateBoostMeter(boostMeterFill, coilSlashChargeProgress, boostState, forceUpdate)
     updateBoostControlVisual(coilSlashChargeProgress, boostState, forceUpdate)
     return
   }
 
-  if (boostHeld && boostEnergy <= 0) {
+  if (boosting) {
+    boostState = 'active'
+    updateBoostMeter(boostMeterFill, boostProgress, boostState, forceUpdate)
+    updateBoostControlVisual(boostProgress, boostState, forceUpdate)
+    return
+  }
+
+  if ((boostHeld || coilHeld) && boostEnergy <= 0) {
     boostState = 'cooldown'
     updateBoostMeter(boostMeterFill, 0, boostState, forceUpdate)
     updateBoostControlVisual(0, boostState, forceUpdate)

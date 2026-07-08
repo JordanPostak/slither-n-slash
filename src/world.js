@@ -257,8 +257,15 @@ function applyRoundedArenaBounds(entity, padding) {
   var velocityIntoWall = entity.dx * correction.normalX + entity.dy * correction.normalY
   if (velocityIntoWall <= 0) return
 
-  entity.dx -= 2 * velocityIntoWall * correction.normalX
-  entity.dy -= 2 * velocityIntoWall * correction.normalY
+  var speed = Math.hypot(entity.dx, entity.dy)
+  var softHeading = getSoftCollisionHeading(
+    Math.atan2(entity.dy, entity.dx),
+    -correction.normalX,
+    -correction.normalY,
+    0.12
+  )
+  entity.dx = Math.cos(softHeading) * speed
+  entity.dy = Math.sin(softHeading) * speed
   entity.facingAngle = Math.atan2(entity.dy, entity.dx)
 }
 
@@ -274,9 +281,12 @@ function applyRoundedSnakeBounds() {
   var velocityIntoWall = velocityX * correction.normalX + velocityY * correction.normalY
   if (velocityIntoWall <= 0) return
 
-  velocityX -= 2 * velocityIntoWall * correction.normalX
-  velocityY -= 2 * velocityIntoWall * correction.normalY
-  headingAngle = Math.atan2(velocityY, velocityX)
+  headingAngle = getSoftCollisionHeading(
+    headingAngle,
+    -correction.normalX,
+    -correction.normalY,
+    getPlayerTurnRate() * 2.4
+  )
 }
 
 function getRoundedArenaCorrection(pointX, pointY, padding) {

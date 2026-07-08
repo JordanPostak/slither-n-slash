@@ -87,7 +87,7 @@
         <div class="instruction-grid">
           <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad. Pause to reposition landscape controls.</p></article>
           <article><span>2</span><h3>Feed</h3><p>Eat grubs and orange balls to grow your score and progression. At 100 progression, large mice begin appearing and add six points. After their blue arrival shield fades, poison beetles remove 25% of your current progression.</p></article>
-          <article><span>3</span><h3>Coil Slash</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to curl through a turn-radius-safe entry loop that already charges the slash. Quick taps give short movement bursts; holding longer feeds more body into the coil and grows the arrow.</p></article>
+          <article><span>3</span><h3>Boost &amp; Coil Strike</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost forward with a stronger slither. Hold <b>S</b> or <b>Down</b> to coil up, then release to strike. On mobile, hold the Boost box to sprint or drag down from it to start Coil Strike.</p></article>
           <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures progressively slow and turn orange; larger or longer creatures take more time relative to your snake. Keep the loop closed until they become food.</p></article>
         </div>
       </section>
@@ -135,9 +135,9 @@
             <button id="game-mode-pause-button" class="game-mode-control-button" type="button">Pause</button>
             <button id="fullscreen-exit-button" class="fullscreen-exit-button" type="button">Exit</button>
           </div>
-          <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Coil Slash control">
+          <div class="mobile-control-box boost-control-box boost-visual-state" data-mobile-control="boost" aria-label="Boost and Coil Strike control">
             <div class="control-position-handle" aria-hidden="true">&#8597;</div>
-            <div class="control-box-label">Coil Slash <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
+            <div class="control-box-label">Boost <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
             <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
           </div>
 
@@ -193,11 +193,11 @@
               <span class="berserker-status-label">Berserker</span>
               <span id="berserker-time">10</span>s
             </div>
-            <div class="boost-label">Coil Slash <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
-            <div class="boost-panel-display boost-visual-state" aria-label="Coil Slash charge">
+            <div class="boost-label">Boost / Coil <span class="boost-capacity" data-boost-capacity>0.5s</span></div>
+            <div class="boost-panel-display boost-visual-state" aria-label="Boost and Coil Strike meter">
               <div class="boost-control-gauge"><div class="boost-control-core"></div></div>
             </div>
-            <div class="boost-meter" aria-label="Coil Slash meter"><div id="boost-meter-fill" class="boost-meter-fill"></div></div>
+            <div class="boost-meter" aria-label="Boost and Coil Strike meter"><div id="boost-meter-fill" class="boost-meter-fill"></div></div>
           </aside>
         </div>
         <p class="game-note">Your selected snake skin and high score are saved only in this browser. No sign-in is needed.</p>

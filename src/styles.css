@@ -313,6 +313,47 @@ canvas {
   height: clamp(22px, 4vw, 29px);
 }
 
+.snake-picker-tongue {
+  position: absolute;
+  z-index: 5;
+  width: 24px;
+  height: 14px;
+  pointer-events: none;
+  transform-origin: 100% 50%;
+  will-change: opacity, transform;
+}
+
+.snake-picker-tongue i {
+  position: absolute;
+  display: block;
+  height: 2px;
+  background: #ff4a63;
+  border-radius: 999px;
+  box-shadow: 0 0 4px rgba(255, 74, 99, 0.55);
+}
+
+.snake-picker-tongue .tongue-main {
+  right: 1px;
+  top: 6px;
+  width: 19px;
+}
+
+.snake-picker-tongue .tongue-fork-one,
+.snake-picker-tongue .tongue-fork-two {
+  left: 0;
+  top: 6px;
+  width: 8px;
+  transform-origin: 100% 50%;
+}
+
+.snake-picker-tongue .tongue-fork-one {
+  transform: rotate(-32deg);
+}
+
+.snake-picker-tongue .tongue-fork-two {
+  transform: rotate(32deg);
+}
+
 .snake-select-actions {
   display: flex;
   justify-content: center;
@@ -529,6 +570,16 @@ button {
 
 .boost-visual-state.is-active {
   border-color: rgba(255, 141, 51, 0.86);
+}
+
+.boost-control-box.is-coil-input {
+  border-color: rgba(185, 228, 116, 0.9);
+  box-shadow: 0 0 22px rgba(185, 228, 116, 0.28);
+}
+
+.boost-control-box.is-coil-input .control-box-label::after {
+  content: " pull";
+  color: #b9e474;
 }
 
 .boost-visual-state.is-cooling .boost-control-gauge {

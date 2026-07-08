@@ -315,6 +315,9 @@ function handleBoostPointerDown(evt) {
   evt.stopPropagation()
   boostTouchActive = true
   boostTouchId = evt.pointerId
+  boostTouchStartY = evt.clientY
+  boostTouchCurrentY = evt.clientY
+  mobileCoilSlashActive = false
   boostBox.classList.add('is-pressed')
   capturePointer(evt.currentTarget, evt.pointerId)
   updateBoostMeterStatus(true)
@@ -331,6 +334,10 @@ function handleBoostPointerUp(evt) {
 function handleActiveTouchPointerMove(evt) {
   if (evt.pointerId === joystickTouchId) {
     handleJoystickPointerMove(evt)
+  }
+
+  if (evt.pointerId === boostTouchId) {
+    handleBoostPointerMove(evt)
   }
 }
 
@@ -372,9 +379,28 @@ function releaseJoystickControl() {
 function releaseBoostControl() {
   boostTouchActive = false
   boostTouchId = null
+  boostTouchStartY = 0
+  boostTouchCurrentY = 0
+  mobileCoilSlashActive = false
   if (boostBox) {
     boostBox.classList.remove('is-pressed')
+    boostBox.classList.remove('is-coil-input')
   }
+  updateBoostMeterStatus(true)
+}
+
+function handleBoostPointerMove(evt) {
+  if (evt.pointerId !== boostTouchId || !boostTouchActive) return
+
+  evt.preventDefault()
+  evt.stopPropagation()
+  boostTouchCurrentY = evt.clientY
+
+  var dragDownDistance = boostTouchCurrentY - boostTouchStartY
+  var coilDragThreshold = Math.max(28, (boostBox ? boostBox.offsetHeight : 96) * 0.24)
+
+  mobileCoilSlashActive = dragDownDistance >= coilDragThreshold
+  if (boostBox) boostBox.classList.toggle('is-coil-input', mobileCoilSlashActive)
   updateBoostMeterStatus(true)
 }
 
@@ -392,6 +418,7 @@ function releaseMobileControls() {
   mobileControls.left = false
   mobileControls.right = false
   mobileControls.boost = false
+  mobileCoilSlashActive = false
   touchBoosting = false
   steerAngleTarget = undefined
 }
@@ -439,11 +466,14 @@ function isMovementKey(key) {
     key === 'ArrowLeft' ||
     key === 'ArrowRight' ||
     key === 'ArrowUp' ||
+    key === 'ArrowDown' ||
     key === 'a' ||
     key === 'A' ||
     key === 'd' ||
     key === 'D' ||
     key === 'w' ||
-    key === 'W'
+    key === 'W' ||
+    key === 's' ||
+    key === 'S'
   )
 }

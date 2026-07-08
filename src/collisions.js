@@ -229,8 +229,8 @@ function applyBadSnakeBounce(firstSnake, secondSnake) {
 
   moveBadSnake(firstSnake, -normalX * overlap * firstPushShare, -normalY * overlap * firstPushShare)
   moveBadSnake(secondSnake, normalX * overlap * secondPushShare, normalY * overlap * secondPushShare)
-  firstSnake.heading = turnTowardAngle(firstSnake.heading, Math.atan2(-normalY, -normalX), badSnakeTurnRate * 3)
-  secondSnake.heading = turnTowardAngle(secondSnake.heading, Math.atan2(normalY, normalX), badSnakeTurnRate * 3)
+  firstSnake.heading = getSoftCollisionHeading(firstSnake.heading, -normalX, -normalY, badSnakeTurnRate * 3)
+  secondSnake.heading = getSoftCollisionHeading(secondSnake.heading, normalX, normalY, badSnakeTurnRate * 3)
 }
 
 function tryBadSnakeRivalFight(firstSnake, secondSnake) {
@@ -274,11 +274,7 @@ function tryBadSnakeRivalBite(attacker, target) {
       attacker.head.y - targetSegment.y,
       attacker.heading
     )
-    attacker.heading = getReflectedHeading(
-      attacker.heading,
-      biteNormal.x,
-      biteNormal.y
-    )
+    attacker.heading = getSoftCollisionHeading(attacker.heading, biteNormal.x, biteNormal.y, badSnakeTurnRate * 4)
     attacker.wanderAngle = attacker.heading
     attacker.nextWanderAt = now + 450
     playRivalSound('bite')

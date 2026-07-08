@@ -197,13 +197,17 @@ function updateBadSnake(enemySnake) {
   applyRoundedArenaBounds(enemyVelocity, 0)
 
   if (enemyVelocity.x < 0 || enemyVelocity.x > canvas.width) {
-    enemyVelocity.dx *= -1
     enemyVelocity.x = Math.max(0, Math.min(canvas.width, enemyVelocity.x))
+    enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, enemyVelocity.x <= 0 ? 1 : -1, 0, badSnakeTurnRate * 3)
+    enemyVelocity.dx = Math.cos(enemySnake.heading) * speed
+    enemyVelocity.dy = Math.sin(enemySnake.heading) * speed
   }
 
   if (enemyVelocity.y < 0 || enemyVelocity.y > canvas.height) {
-    enemyVelocity.dy *= -1
     enemyVelocity.y = Math.max(0, Math.min(canvas.height, enemyVelocity.y))
+    enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, 0, enemyVelocity.y <= 0 ? 1 : -1, badSnakeTurnRate * 3)
+    enemyVelocity.dx = Math.cos(enemySnake.heading) * speed
+    enemyVelocity.dy = Math.sin(enemySnake.heading) * speed
   }
 
   enemySnake.head.x = enemyVelocity.x
