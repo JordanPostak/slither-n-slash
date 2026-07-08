@@ -1,5 +1,7 @@
 // Landing-page navigation, play mode, settings, and adjustable mobile controls.
 
+var snakeSkinPreviewAnimationId = 0
+
 function handlePrimaryGameToggle() {
   if (!document.body.classList.contains('is-game-mode')) {
     enterGameMode(false)
@@ -172,10 +174,26 @@ function setupSnakeSkinSelection() {
   var skinOptions = Array.from(document.querySelectorAll('[data-snake-skin]'))
   var startButton = document.getElementById('snake-select-start')
   var cancelButton = document.getElementById('snake-select-cancel')
+  var carouselButtons = Array.from(document.querySelectorAll('[data-snake-carousel]'))
 
   if (!selectionScreen || !startButton || !cancelButton) return
 
-  function selectSkin(skinNumber) {
+  function getSelectedSkinIndex() {
+    for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
+      if (Number(skinOptions[optionIndex].dataset.snakeSkin) === selectedSnakeSkin) return optionIndex
+    }
+
+    return 0
+  }
+
+  function centerSelectedSkin() {
+    var selectedOption = skinOptions[getSelectedSkinIndex()]
+    if (!selectedOption) return
+    selectedOption.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    window.requestAnimationFrame(updateSnakeSkinPreviewSpines)
+  }
+
+  function selectSkin(skinNumber, shouldCenter) {
     selectedSnakeSkin = Number(skinNumber) || 1
 
     for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
@@ -184,13 +202,33 @@ function setupSnakeSkinSelection() {
       option.classList.toggle('is-selected', isSelected)
       option.setAttribute('aria-checked', String(isSelected))
     }
+
+    if (shouldCenter) centerSelectedSkin()
   }
 
   for (var optionIndex = 0; optionIndex < skinOptions.length; optionIndex++) {
     skinOptions[optionIndex].addEventListener('click', function (event) {
-      selectSkin(event.currentTarget.dataset.snakeSkin)
+      selectSkin(event.currentTarget.dataset.snakeSkin, true)
     })
   }
+
+  for (var carouselButtonIndex = 0; carouselButtonIndex < carouselButtons.length; carouselButtonIndex++) {
+    carouselButtons[carouselButtonIndex].addEventListener('click', function (event) {
+      var direction = event.currentTarget.dataset.snakeCarousel === 'previous' ? -1 : 1
+      var nextIndex = (getSelectedSkinIndex() + direction + skinOptions.length) % skinOptions.length
+      selectSkin(skinOptions[nextIndex].dataset.snakeSkin, true)
+      skinOptions[nextIndex].focus({ preventScroll: true })
+    })
+  }
+
+  selectionScreen.addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    var direction = event.key === 'ArrowLeft' ? -1 : 1
+    var nextIndex = (getSelectedSkinIndex() + direction + skinOptions.length) % skinOptions.length
+    selectSkin(skinOptions[nextIndex].dataset.snakeSkin, true)
+    skinOptions[nextIndex].focus({ preventScroll: true })
+  })
 
   startButton.addEventListener('click', function () {
     startButton.disabled = true
@@ -210,6 +248,100 @@ function setupSnakeSkinSelection() {
   })
 
   selectSkin(selectedSnakeSkin)
+  window.requestAnimationFrame(updateSnakeSkinPreviewSpines)
+}
+
+function startSnakeSkinPreviewAnimation() {
+  if (snakeSkinPreviewAnimationId) return
+
+  function animateSnakeSkinPreviews(timestamp) {
+    updateSnakeSkinPreviewSpines(timestamp)
+
+    var selectionScreen = document.getElementById('snake-select-screen')
+    if (!selectionScreen || selectionScreen.hidden) {
+      snakeSkinPreviewAnimationId = 0
+      return
+    }
+
+    snakeSkinPreviewAnimationId = window.requestAnimationFrame(animateSnakeSkinPreviews)
+  }
+
+  snakeSkinPreviewAnimationId = window.requestAnimationFrame(animateSnakeSkinPreviews)
+}
+
+function stopSnakeSkinPreviewAnimation() {
+  if (!snakeSkinPreviewAnimationId) return
+  window.cancelAnimationFrame(snakeSkinPreviewAnimationId)
+  snakeSkinPreviewAnimationId = 0
+}
+
+function updateSnakeSkinPreviewSpines(timestamp) {
+  var previews = document.querySelectorAll('.snake-skin-preview')
+  var animationTime = Number(timestamp) || window.performance.now()
+  var shouldReduceMotion = document.body.classList.contains('reduce-effects')
+
+  for (var previewIndex = 0; previewIndex < previews.length; previewIndex++) {
+    var preview = previews[previewIndex]
+    var option = preview.closest('.snake-skin-option')
+    var pieces = Array.from(preview.querySelectorAll('img'))
+    if (!option || pieces.length === 0 || preview.clientWidth <= 0 || preview.clientHeight <= 0) continue
+
+    var isSelected = option.classList.contains('is-selected')
+    var shouldAnimate = isSelected && !shouldReduceMotion
+    var skinNumber = Number(option.dataset.snakeSkin) || 1
+    var bodyStepScale = skinNumber === 4 ? 0.8 : 0.86
+    var headStepScale = skinNumber === 4 ? 0.82 : 0.88
+    var tailStepScale = skinNumber === 4 ? 0.68 : 0.74
+    var pieceSteps = []
+    var totalLength = 0
+
+    for (var pieceIndex = 0; pieceIndex < pieces.length; pieceIndex++) {
+      var pieceWidth = pieces[pieceIndex].offsetWidth || 48
+      var isHead = pieceIndex === 0
+      var isTail = pieceIndex === pieces.length - 1
+      var step = pieceWidth * (isHead ? headStepScale : (isTail ? tailStepScale : bodyStepScale))
+      pieceSteps.push(step)
+      if (!isTail) totalLength += step
+    }
+
+    var headPiece = pieces[0]
+    var headWidth = headPiece ? (headPiece.offsetWidth || 60) : 0
+    var headForwardOverhang = headWidth * 0.72
+    var tailPiece = pieces[pieces.length - 1]
+    var tailWidth = tailPiece ? (tailPiece.offsetWidth || 64) : 0
+    var visualLength = headForwardOverhang + totalLength + tailWidth
+    var startX = Math.max(8 + headForwardOverhang, (preview.clientWidth - visualLength) / 2 + headForwardOverhang)
+    var jointX = startX
+    var jointY = preview.clientHeight * 0.08
+    var waveSpeed = animationTime * 0.0058
+    var selectedLift = shouldAnimate ? Math.sin(waveSpeed) * 2 : 0
+
+    for (var segmentIndex = 0; segmentIndex < pieces.length; segmentIndex++) {
+      var piece = pieces[segmentIndex]
+      var pieceHeight = piece.offsetHeight || 28
+      var pieceWidth = piece.offsetWidth || 48
+      var isHeadPiece = segmentIndex === 0
+      var isLastPiece = segmentIndex === pieces.length - 1
+      var angle = shouldAnimate
+        ? Math.sin(waveSpeed - segmentIndex * 0.72) * (isHeadPiece ? 0.035 : 0.18)
+        : 0
+      var frontX = isHeadPiece ? jointX - pieceWidth * 0.72 : jointX
+      var frontY = jointY + selectedLift
+
+      piece.style.transform = 'translate(' + frontX.toFixed(2) + 'px, ' +
+        (frontY - pieceHeight / 2).toFixed(2) + 'px) rotate(' + angle.toFixed(4) + 'rad)'
+
+      if (!isLastPiece) {
+        if (isHeadPiece) {
+          jointX = frontX + Math.cos(angle) * pieceWidth * 0.88
+          jointY = frontY + Math.sin(angle) * pieceWidth * 0.16
+        } else {
+          jointX = jointX + Math.cos(angle) * pieceSteps[segmentIndex]
+          jointY = jointY + Math.sin(angle) * pieceSteps[segmentIndex]
+        }
+      }
+    }
+  }
 }
 
 function showSnakeSelection() {
@@ -226,13 +358,19 @@ function showSnakeSelection() {
   selectionScreen.hidden = false
   document.body.classList.add('is-snake-selecting')
   var selectedOption = selectionScreen.querySelector('.snake-skin-option.is-selected')
-  if (selectedOption) selectedOption.focus()
+  if (selectedOption) {
+    selectedOption.focus()
+    selectedOption.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' })
+  }
+
+  startSnakeSkinPreviewAnimation()
 }
 
 function hideSnakeSelection() {
   var selectionScreen = document.getElementById('snake-select-screen')
   if (selectionScreen) selectionScreen.hidden = true
   document.body.classList.remove('is-snake-selecting')
+  stopSnakeSkinPreviewAnimation()
 }
 
 function setupSectionNavigation() {
@@ -257,6 +395,7 @@ function updateActiveSectionNavigation(forcedSectionId) {
   var navigationLinks = Array.from(document.querySelectorAll(
     '.site-nav a[href^="#"], .site-footer nav a[href^="#"]'
   ))
+  var currentSectionLabel = document.getElementById('current-section-label')
   var sectionIds = []
 
   for (var i = 0; i < navigationLinks.length; i++) {
@@ -292,6 +431,7 @@ function updateActiveSectionNavigation(forcedSectionId) {
 
     if (isCurrent) {
       navigationLinks[linkIndex].setAttribute('aria-current', 'location')
+      if (currentSectionLabel) currentSectionLabel.textContent = navigationLinks[linkIndex].textContent.trim()
     } else {
       navigationLinks[linkIndex].removeAttribute('aria-current')
     }

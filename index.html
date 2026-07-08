@@ -39,6 +39,7 @@
         <img src="./assets/python-head.png" alt="" width="48" height="48" />
         <span>Slither <b>N' Slash</b></span>
       </a>
+      <span id="current-section-label" class="current-section-label" aria-live="polite">Home</span>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu</button>
       <nav id="site-navigation" class="site-nav" aria-label="Main navigation">
         <a href="#home">Home</a>
@@ -70,8 +71,7 @@
             <li>No account required</li>
           </ul>
         </div>
-        <div class="hero-art" role="img" aria-label="Slither N' Slash python head over a snake racing through a rocky arena">
-          <img class="hero-logo-head" src="./assets/python-head.png" alt="" width="420" height="420" />
+        <div class="hero-art" role="img" aria-label="Slither N' Slash snake racing through a rocky arena">
           <canvas id="hero-snake-canvas" class="hero-snake-canvas" aria-hidden="true"></canvas>
           <span class="food-orb orb-one"></span>
           <span class="food-orb orb-two"></span>
@@ -147,22 +147,26 @@
               <div class="snake-select-panel">
                 <p class="eyebrow">Choose your snake</p>
                 <h3 id="snake-select-title">Pick a player skin</h3>
-                <div class="snake-skin-grid" role="radiogroup" aria-label="Player snake skins">
-                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="1" aria-checked="false">
-                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake1/snake1-head.png" alt="" /><img src="./assets/Snake1/snake1-body1.png" alt="" /><img src="./assets/Snake1/snake1-body2.png" alt="" /><img src="./assets/Snake1/snake1-tail.png" alt="" /></span><span>Snake 1</span>
-                  </button>
-                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="2" aria-checked="false">
-                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake2/snake2-head.png" alt="" /><img src="./assets/Snake2/snake2-body1.png" alt="" /><img src="./assets/Snake2/snake2-body2.png" alt="" /><img src="./assets/Snake2/snake2-tail.png" alt="" /></span><span>Snake 2</span>
-                  </button>
-                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="3" aria-checked="false">
-                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake3/snake3-head.png" alt="" /><img src="./assets/Snake3/snake3-body1.png" alt="" /><img src="./assets/Snake3/snake3-body2.png" alt="" /><img src="./assets/Snake3/snake3-tail.png" alt="" /></span><span>Snake 3</span>
-                  </button>
-                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="4" aria-checked="false">
-                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake4/snake4-head.png" alt="" /><img src="./assets/Snake4/snake4-body1.png" alt="" /><img src="./assets/Snake4/snake4-body2.png" alt="" /><img src="./assets/Snake4/snake4-tail.png" alt="" /></span><span>Snake 4</span>
-                  </button>
-                  <button class="snake-skin-option" type="button" role="radio" data-snake-skin="5" aria-checked="false">
-                    <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake5/snake5-head.png" alt="" /><img src="./assets/Snake5/snake5-body1.png" alt="" /><img src="./assets/Snake5/snake5-body2.png" alt="" /><img src="./assets/Snake5/snake5-tail.png" alt="" /></span><span>Snake 5</span>
-                  </button>
+                <div class="snake-skin-carousel">
+                  <button class="snake-skin-carousel-button" type="button" data-snake-carousel="previous" aria-label="Previous snake skin">&#8249;</button>
+                  <div class="snake-skin-grid" role="radiogroup" aria-label="Player snake skins">
+                    <button class="snake-skin-option" type="button" role="radio" data-snake-skin="1" aria-checked="false">
+                      <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake1/snake1-head.png" alt="" /><img src="./assets/Snake1/snake1-body1.png" alt="" /><img src="./assets/Snake1/snake1-body2.png" alt="" /><img src="./assets/Snake1/snake1-body3.png" alt="" /><img src="./assets/Snake1/snake1-body4.png" alt="" /><img src="./assets/Snake1/snake1-body5.png" alt="" /><img src="./assets/Snake1/snake1-tail.png" alt="" /></span><span>Snake 1</span>
+                    </button>
+                    <button class="snake-skin-option" type="button" role="radio" data-snake-skin="2" aria-checked="false">
+                      <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake2/snake2-head.png" alt="" /><img src="./assets/Snake2/snake2-body1.png" alt="" /><img src="./assets/Snake2/snake2-body2.png" alt="" /><img src="./assets/Snake2/snake2-body3.png" alt="" /><img src="./assets/Snake2/snake2-body4.png" alt="" /><img src="./assets/Snake2/snake2-tail.png" alt="" /></span><span>Snake 2</span>
+                    </button>
+                    <button class="snake-skin-option" type="button" role="radio" data-snake-skin="3" aria-checked="false">
+                      <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake3/snake3-head.png" alt="" /><img src="./assets/Snake3/snake3-body1.png" alt="" /><img src="./assets/Snake3/snake3-body2.png" alt="" /><img src="./assets/Snake3/snake3-body3.png" alt="" /><img src="./assets/Snake3/snake3-body4.png" alt="" /><img src="./assets/Snake3/snake3-body5.png" alt="" /><img src="./assets/Snake3/snake3-tail.png" alt="" /></span><span>Snake 3</span>
+                    </button>
+                    <button class="snake-skin-option" type="button" role="radio" data-snake-skin="4" aria-checked="false">
+                      <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake4/snake4-head.png" alt="" /><img src="./assets/Snake4/snake4-body1.png" alt="" /><img src="./assets/Snake4/snake4-body2.png" alt="" /><img src="./assets/Snake4/snake4-body3.png" alt="" /><img src="./assets/Snake4/snake4-body4.png" alt="" /><img src="./assets/Snake4/snake4-body5.png" alt="" /><img src="./assets/Snake4/snake4-body6.png" alt="" /><img src="./assets/Snake4/snake4-tail.png" alt="" /></span><span>Snake 4</span>
+                    </button>
+                    <button class="snake-skin-option" type="button" role="radio" data-snake-skin="5" aria-checked="false">
+                      <span class="snake-skin-preview" aria-hidden="true"><img src="./assets/Snake5/snake5-head.png" alt="" /><img src="./assets/Snake5/snake5-body1.png" alt="" /><img src="./assets/Snake5/snake5-body2.png" alt="" /><img src="./assets/Snake5/snake5-body3.png" alt="" /><img src="./assets/Snake5/snake5-body4.png" alt="" /><img src="./assets/Snake5/snake5-body5.png" alt="" /><img src="./assets/Snake5/snake5-tail.png" alt="" /></span><span>Snake 5</span>
+                    </button>
+                  </div>
+                  <button class="snake-skin-carousel-button" type="button" data-snake-carousel="next" aria-label="Next snake skin">&#8250;</button>
                 </div>
                 <div class="snake-select-actions">
                   <button id="snake-select-cancel" class="tool-button" type="button">Back</button>

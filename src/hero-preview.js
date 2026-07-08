@@ -28,8 +28,8 @@ function drawHeroSnakePreview() {
   heroContext.imageSmoothingEnabled = true
   heroContext.imageSmoothingQuality = 'high'
 
-  var points = getHeroSnakePreviewPoints(rect.width, rect.height, 6)
   var previewScale = Math.min(rect.width, rect.height) / 215
+  var points = getHeroSnakePreviewPoints(rect.width, rect.height, previewScale)
 
   var headPoint = points[points.length - 1]
   var beforeHead = points[points.length - 2]
@@ -38,15 +38,26 @@ function drawHeroSnakePreview() {
     x: headPoint.x + Math.cos(headAngle) * 14 * previewScale,
     y: headPoint.y + Math.sin(headAngle) * 14 * previewScale,
   }
+
   drawHeroSnakePreviewSegment(heroContext, wormHeadImage, renderedHeadPoint, headAngle, 44, 24, previewScale)
 
-  for (var i = points.length - 2; i >= 0; i--) {
+  for (var i = points.length - 2; i >= 1; i--) {
     var nextPoint = points[Math.min(points.length - 1, i + 1)]
     var previousPoint = points[Math.max(0, i - 1)]
     var bodyAngle = Math.atan2(nextPoint.y - previousPoint.y, nextPoint.x - previousPoint.x)
-    var bodySequenceIndex = points.length - 2 - i
+    var bodySequenceIndex = i - 1
     var bodyImage = wormBodyImages[bodySequenceIndex % wormBodyImages.length]
-    drawHeroSnakePreviewSegment(heroContext, bodyImage, points[i], bodyAngle, 30, 18, previewScale)
+    var bodyPoint = {
+      x: points[i].x,
+      y: points[i].y,
+    }
+
+    if (i === points.length - 3) {
+      bodyPoint.x += 2 * previewScale
+      bodyPoint.y += 2 * previewScale
+    }
+
+    drawHeroSnakePreviewSegment(heroContext, bodyImage, bodyPoint, bodyAngle, 30, 16, previewScale)
   }
 
   drawHeroSnakePreviewTail(heroContext, points[0], points[1], previewScale)
@@ -63,7 +74,7 @@ function areSnakePreviewImagesReady() {
   return true
 }
 
-function getHeroSnakePreviewPoints(width, height, pointCount) {
+function getHeroSnakePreviewPoints(width, height, previewScale) {
   var curvePoints = []
   var cumulativeLengths = [0]
   var sampleCount = 120
@@ -82,9 +93,13 @@ function getHeroSnakePreviewPoints(width, height, pointCount) {
   }
 
   var points = []
+  var segmentSpacing = 20 * previewScale
+  var pointCount = Math.max(7, Math.min(13, Math.floor(totalLength / segmentSpacing) + 1))
+  var usedLength = segmentSpacing * (pointCount - 1)
+  var startLength = Math.max(0, (totalLength - usedLength) * 0.5)
 
   for (var pointIndex = 0; pointIndex < pointCount; pointIndex++) {
-    var targetLength = totalLength * pointIndex / (pointCount - 1)
+    var targetLength = startLength + segmentSpacing * pointIndex
     var sampleIndex = 1
 
     while (sampleIndex < cumulativeLengths.length && cumulativeLengths[sampleIndex] < targetLength) {
@@ -125,8 +140,8 @@ function drawHeroSnakePreviewSegment(heroContext, image, point, angle, width, he
 
 function drawHeroSnakePreviewTail(heroContext, tailPoint, nextPoint, scale) {
   var tailAngle = Math.atan2(tailPoint.y - nextPoint.y, tailPoint.x - nextPoint.x)
-  var tailX = tailPoint.x + Math.cos(tailAngle) * 24 * scale
-  var tailY = tailPoint.y + Math.sin(tailAngle) * 24 * scale
+  var tailX = tailPoint.x + Math.cos(tailAngle) * 16 * scale
+  var tailY = tailPoint.y + Math.sin(tailAngle) * 16 * scale
   var tailWidth = 52 * scale
   var tailHeight = 18 * scale
 
