@@ -74,6 +74,26 @@ function waitForPlayerSkinImage(image) {
   })
 }
 
+function loadCentipedeSprites() {
+  centipedeHeadImage = new Image()
+  centipedeBodyImage = new Image()
+  centipedeTailImage = new Image()
+
+  centipedeHeadImage.src = './assets/centipede-head.png'
+  centipedeBodyImage.src = './assets/centipede-body.png'
+  centipedeTailImage.src = './assets/centipede-tail.png'
+}
+
+function loadFoodSprites() {
+  mouseImage = new Image()
+  mealWormImage = new Image()
+  blisterBeetleImage = new Image()
+
+  mouseImage.src = './assets/mouse.png'
+  mealWormImage.src = './assets/meal-worm.png'
+  blisterBeetleImage.src = './assets/blister-beetle.png'
+}
+
 function getSavedPlayerSnakeSkin() {
   try {
     var storedSkin = Number(window.localStorage.getItem('slitherNSlashPlayerSkin'))
@@ -86,6 +106,8 @@ function getSavedPlayerSnakeSkin() {
 selectedSnakeSkin = getSavedPlayerSnakeSkin()
 loadPlayerSnakeSkin(selectedSnakeSkin)
 loadTreeSnakeSkin(treeSnakeSkinNumber)
+loadCentipedeSprites()
+loadFoodSprites()
 highScore = getHighScore()
 
 canvas = document.getElementById('myCanvas')

@@ -88,7 +88,7 @@ function updateGoldenMouse() {
 
   goldenMouse.x += goldenMouse.dx
   goldenMouse.y += goldenMouse.dy
-  goldenMouse.facingAngle = Math.atan2(goldenMouse.dy, goldenMouse.dx)
+  updateEntityFacingForMovement(goldenMouse)
 
   var edgeSize = 16 * renderScale * (goldenMouse.sizeScale || 1)
 
@@ -113,12 +113,13 @@ function updateGoldenMouse() {
     goldenMouse.y = Math.max(0, Math.min(canvas.height - edgeSize, goldenMouse.y))
   }
 
-  goldenMouse.facingAngle = Math.atan2(goldenMouse.dy, goldenMouse.dx)
+  updateEntityFacingForMovement(goldenMouse)
+  smoothMouseFacingAngle(goldenMouse)
 }
 
 function generateGoldenMouse() {
   var sizeScale = mouseBaseSizeScale
-  var spawn = getOffscreenSpawn(getRandomFoodSpeed() * 1.08, 28 * renderScale * sizeScale)
+  var spawn = getOffscreenSpawn(getRandomMouseTravelSpeed(), 28 * renderScale * sizeScale)
 
   return {
     x: spawn.x,

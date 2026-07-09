@@ -28,8 +28,8 @@ function createBadSnake() {
     wanderAngle: heading,
     nextWanderAt: 0,
     cutCooldownUntil: 0,
-    collisionScale: 1,
-    segmentSpacingScale: 1,
+    collisionScale: 1.15,
+    segmentSpacingScale: 1.18,
     slitherPhase: Math.random() * Math.PI * 2,
     slitherDirection: Math.random() < 0.5 ? -1 : 1,
     lastSlitherWaveAt: Date.now(),
@@ -554,8 +554,8 @@ function applyBadSnakeSpinalSlither(enemySnake) {
   enemySnake.slitherPhase = (enemySnake.slitherPhase || 0) + elapsed * regularSlitherSpeed
 
   var waveAmplitude = Math.min(
-    12 * renderScale,
-    playerSegmentSpacing * regularSlitherAmplitude
+    6 * renderScale,
+    playerSegmentSpacing * regularSlitherAmplitude * 0.62
   ) * Math.max(0, 1 - (enemySnake.crushProgress || 0) * 0.7)
   var slitherAge = now - (enemySnake.slitherStartedAt || now)
   var warmupProgress = Math.max(0, Math.min(1, slitherAge / treeSnakeSlitherWarmupDuration))
@@ -575,7 +575,7 @@ function applyBadSnakeSpinalSlither(enemySnake) {
 
     var normalX = -tangentY / tangentLength
     var normalY = tangentX / tangentLength
-    var headStability = Math.max(0, Math.min(1, (waveIndex - 1) / 5))
+    var headStability = Math.max(0, Math.min(1, (waveIndex - 2) / 7))
     var wave = Math.sin(enemySnake.slitherPhase - waveIndex * regularSlitherPhase) *
       waveAmplitude *
       headStability *
@@ -643,7 +643,7 @@ function getBadSnakeSegmentSpacing(enemySnake) {
     return 19 * renderScale * getTreeSnakeSpacingScale(enemySnake)
   }
 
-  return segLength * 0.94 * (enemySnake.segmentSpacingScale || 1)
+  return segLength * (enemySnake.segmentSpacingScale || 1)
 }
 
 function getTreeSnakeTailFollowDistance(enemySnake) {

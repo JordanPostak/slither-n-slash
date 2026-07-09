@@ -42,7 +42,7 @@ function drawPlayerStyleTreeSnakeSegment(enemySnake, segmentIndex) {
     : treeSnakeBodyImages[(segmentIndex - 1) % treeSnakeBodyImages.length]
   var treeSnakeSizeScale = getTreeSnakeSizeScale(enemySnake)
   var treeSnakeRenderScale = renderScale * treeSnakeSizeScale
-  var segmentWidth = (isHead ? 44 : 30) * treeSnakeRenderScale
+  var segmentWidth = (isHead ? 44 : 33) * treeSnakeRenderScale
   var segmentHeight = (isHead ? 24 : 18) * treeSnakeRenderScale
 
   ctx.save()
@@ -74,7 +74,7 @@ function getTreeSnakeSegmentRenderPose(enemySnake, segmentIndex) {
   if (segmentIndex === 0) {
     var headAngle = Math.atan2(enemySnake.head.y - segment.y, enemySnake.head.x - segment.x)
     if (!Number.isFinite(headAngle)) headAngle = enemySnake.heading
-    var headOffset = 14 * renderScale * getTreeSnakeSizeScale(enemySnake)
+    var headOffset = 11.5 * renderScale * getTreeSnakeSizeScale(enemySnake)
 
     return {
       x: segment.x + Math.cos(headAngle) * headOffset,
@@ -88,7 +88,7 @@ function getTreeSnakeSegmentRenderPose(enemySnake, segmentIndex) {
     ? enemySnake.segments[segmentIndex + 1]
     : segment
   var angle = Math.atan2(leader.y - follower.y, leader.x - follower.x)
-  var bodyPivotOffset = 2.5 * renderScale * getTreeSnakeSizeScale(enemySnake)
+  var bodyPivotOffset = 0.8 * renderScale * getTreeSnakeSizeScale(enemySnake)
 
   return {
     x: segment.x - Math.cos(angle) * bodyPivotOffset,
@@ -128,7 +128,7 @@ function getTreeSnakeTailRenderPose(enemySnake) {
   var tailIndex = Math.max(0, enemySnake.segments.length - 2)
   var lastBodyPose = getTreeSnakeSegmentRenderPose(enemySnake, tailIndex)
   var treeSnakeRenderScale = renderScale * getTreeSnakeSizeScale(enemySnake)
-  var bodyRearDistance = Math.max(7, 30 / 2 - 2) * treeSnakeRenderScale
+  var bodyRearDistance = Math.max(7, 33 / 2 - 2) * treeSnakeRenderScale
   var jointX = lastBodyPose.x - Math.cos(lastBodyPose.angle) * bodyRearDistance
   var jointY = lastBodyPose.y - Math.sin(lastBodyPose.angle) * bodyRearDistance
   var tailPoint = enemySnake.tailPoint || enemySnake.segments[enemySnake.segments.length - 1]

@@ -11,7 +11,7 @@ function generateFood(foodType) {
   var sizeScale = isMouse ? mouseBaseSizeScale : 1
   var baseGrowthValue = isBad ? 0 : isGrub ? 1 : mouseGrowthValue
   var spawn = getOffscreenSpawn(
-    isGrub ? getRandomGrubSpeed() : getRandomFoodSpeed(),
+    isGrub ? getRandomGrubSpeed() : isMouse ? getRandomMouseTravelSpeed() : getRandomFoodSpeed(),
     24 * renderScale * sizeScale
   )
   var now = Date.now()
@@ -41,12 +41,16 @@ function generateFood(foodType) {
 
 function getRandomMouseVelocity() {
   var angle = Math.random() * Math.PI * 2
-  var speed = (0.55 + Math.random() * 1.1) * motionScale
+  var speed = getRandomMouseTravelSpeed()
 
   return {
     dx: Math.cos(angle) * speed,
     dy: Math.sin(angle) * speed,
   }
+}
+
+function getRandomMouseTravelSpeed() {
+  return (2.35 + Math.random() * 1.95) * motionScale
 }
 
 function startFoodTimer() {

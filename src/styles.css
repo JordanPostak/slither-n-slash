@@ -76,11 +76,12 @@ body.is-berserker .game-shell {
   position: relative;
   --arena-corner-radius: 24px;
   --arena-tile-size: 420px;
+  --arena-background-start-zoom: 4.35;
   --arena-background-tile-size: var(--arena-tile-size);
   min-width: 0;
   min-height: 360px;
   overflow: hidden;
-  background: url("../assets/dirt-background.png") center / var(--arena-background-tile-size) var(--arena-background-tile-size) repeat;
+  background: url("../assets/mossy-rock.png") center / var(--arena-background-tile-size) var(--arena-background-tile-size) repeat;
   border: 2px solid rgba(255, 214, 133, 0.42);
   border-radius: var(--arena-corner-radius);
   transition: background-size 280ms ease-out;

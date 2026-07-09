@@ -56,7 +56,7 @@ function getEntityBounceRadius(entity) {
   if (entity.type === 'centipede-orb') return 7 * renderScale * entitySizeScale
   if (entity.type === 'grub') return 14 * renderScale * entitySizeScale
   if (entity.type === 'mouse') return 16 * renderScale * entitySizeScale
-  if (entity.isBad) return 14 * renderScale * entitySizeScale
+  if (entity.isBad) return 8 * renderScale * entitySizeScale
   return 14 * renderScale * entitySizeScale
 }
 

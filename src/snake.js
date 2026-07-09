@@ -168,7 +168,7 @@ function drawSnakeSegment(i) {
     ? wormHeadImage
     : wormBodyImages[(i - 1) % wormBodyImages.length]
   var imageReady = segmentImage.complete && segmentImage.naturalWidth > 0
-  var segmentWidth = (i === 0 ? 44 : 30) * renderScale * playerSizeScale
+  var segmentWidth = (i === 0 ? 44 : 33) * renderScale * playerSizeScale
   var segmentHeight = (i === 0 ? 24 : 18) * renderScale * playerSizeScale
 
   if (imageReady) {
@@ -267,8 +267,8 @@ function getSnakeSegmentRenderPose(i) {
       : Math.atan2(leaderY - y[i], leaderX - x[i]))
     : Math.atan2(leaderY - followerY, leaderX - followerX)
   var playerSizeScale = getPlayerSizeScale()
-  var headOffset = i === 0 ? 14 * renderScale * playerSizeScale : 0
-  var bodyPivotOffset = i === 0 ? 0 : 2.5 * renderScale * playerSizeScale
+  var headOffset = i === 0 ? 11.5 * renderScale * playerSizeScale : 0
+  var bodyPivotOffset = i === 0 ? 0 : 0.8 * renderScale * playerSizeScale
 
   return {
     x: x[i] + Math.cos(angle) * (headOffset - bodyPivotOffset),
@@ -397,7 +397,7 @@ function getSnakeTailRenderPose() {
   var tailIndex = Math.max(0, x.length - 2)
   var playerSizeScale = getPlayerSizeScale()
   var lastBodyPose = getSnakeSegmentRenderPose(tailIndex)
-  var lastBodyWidth = tailIndex === 0 ? 44 : 30
+  var lastBodyWidth = tailIndex === 0 ? 44 : 33
   var bodyRearDistance = Math.max(7, lastBodyWidth / 2 - 2) * renderScale * playerSizeScale
   var jointX = lastBodyPose.x - Math.cos(lastBodyPose.angle) * bodyRearDistance
   var jointY = lastBodyPose.y - Math.sin(lastBodyPose.angle) * bodyRearDistance
@@ -681,17 +681,26 @@ function applyRegularSnakeSlither() {
     var headStability = Math.min(1, (segmentIndex + 1) / 4)
     var wave = Math.sin(waveTime - segmentIndex * regularSlitherPhase) * waveAmplitude * headStability
 
-    var safeWave = getAvailableSnakeSlitherWave(
+    var targetSafeWave = getAvailableSnakeSlitherWave(
       segmentIndex,
       x[segmentIndex],
       y[segmentIndex],
       normalX * wave,
       normalY * wave
     )
+    var previousSafeWave = snakeSlitherWaveAvailability[segmentIndex]
+
+    if (previousSafeWave === undefined) previousSafeWave = targetSafeWave
+
+    var safeWave = previousSafeWave + (targetSafeWave - previousSafeWave) * 0.24
+    if (Math.abs(targetSafeWave - safeWave) < 0.01) safeWave = targetSafeWave
+    snakeSlitherWaveAvailability[segmentIndex] = safeWave
 
     x[segmentIndex] += normalX * wave * safeWave
     y[segmentIndex] += normalY * wave * safeWave
   }
+
+  snakeSlitherWaveAvailability.length = x.length
 
   constrainRegularSnakeSegmentSpacing()
 }
@@ -1017,6 +1026,7 @@ function resetSnakeBody() {
   snakeTrail = []
   snakeSegmentGrowthProgress = []
   snakeSegmentGrowthStartedAt = []
+  snakeSlitherWaveAvailability = []
 
   var trailLength = Math.max(0, n - 1) * playerSegmentSpacing + getSnakeTailFollowDistance() + 30 * renderScale
   var pointSpacing = Math.max(1.5, 2.5 * renderScale)

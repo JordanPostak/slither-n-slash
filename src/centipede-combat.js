@@ -21,6 +21,7 @@ function bouncePlayerOffBadSnake(contactX, contactY, predatorScale) {
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
   updateSnakeBodyFromTrail(true)
 }
 
@@ -44,6 +45,7 @@ function bounceSnakeHeadsApart(enemySnake) {
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
   updateSnakeBodyFromTrail(true)
 }
 
@@ -61,6 +63,7 @@ function slidePlayerOffBadSnake(contactX, contactY, predatorScale) {
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
   updateSnakeBodyFromTrail(true)
 }
 
@@ -81,6 +84,7 @@ function slideSnakeHeadsApart(enemySnake) {
   steerTarget = undefined
   steerAngleTarget = undefined
   applyRoundedSnakeBounds()
+  recordSnakeHeadTrail()
   updateSnakeBodyFromTrail(true)
 }
 
@@ -226,6 +230,7 @@ function removePlayerSegments(count) {
     y.splice(n)
     snakeSegmentGrowthProgress.splice(n)
     snakeSegmentGrowthStartedAt.splice(n)
+    snakeSlitherWaveAvailability.splice(n)
   }
 
   updateSnakeBodyFromTrail()

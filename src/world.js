@@ -61,7 +61,7 @@ function foodRandom() {
     var foodEdgeSize = 13 * renderScale * (foods[i].sizeScale || 1)
 
     if (foods[i].leavingArena) {
-      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+      updateEntityFacingForMovement(foods[i])
 
       if (isEntityOutsideArena(foods[i], foodEdgeSize + 18 * renderScale)) {
         foods.splice(i, 1)
@@ -72,7 +72,7 @@ function foodRandom() {
     }
 
     if (foods[i].enteringArena) {
-      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+      updateEntityFacingForMovement(foods[i])
 
       if (isEntityInsideArena(foods[i], foodEdgeSize)) {
         foods[i].enteringArena = false
@@ -89,14 +89,18 @@ function foodRandom() {
 
     if (foods[i].x < 0 || foods[i].x > canvas.width - foodEdgeSize) {
       foods[i].dx *= -1
-      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+      updateEntityFacingForMovement(foods[i])
       foods[i].x = Math.max(0, Math.min(canvas.width - foodEdgeSize, foods[i].x))
     }
 
     if (foods[i].y < 0 || foods[i].y > canvas.height - foodEdgeSize) {
       foods[i].dy *= -1
-      foods[i].facingAngle = Math.atan2(foods[i].dy, foods[i].dx)
+      updateEntityFacingForMovement(foods[i])
       foods[i].y = Math.max(0, Math.min(canvas.height - foodEdgeSize, foods[i].y))
+    }
+
+    if (foods[i].type === 'mouse') {
+      smoothMouseFacingAngle(foods[i])
     }
 
   }
@@ -144,7 +148,7 @@ function applySnakeBodyBounce(entity) {
 
   entity.dx += normalX * 0.08
   entity.dy += normalY * 0.08
-  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+  updateEntityFacingForMovement(entity)
   entity.pauseUntil = 0
 }
 
@@ -177,13 +181,11 @@ function updateMouseMovement(food) {
     var fleeAngle = Math.atan2(fleeY, fleeX)
     var panic = 1 - distanceFromSnake / fleeRadius
     var staminaScale = 0.55 + 0.45 * (food.fleeEnergy / mouseFleeStamina)
-    var speed = (mouseFleeSpeed + panic * 0.45) * staminaScale * motionScale
+    var speed = (mouseFleeSpeed + panic * 0.75) * staminaScale * motionScale
 
-    food.dx = Math.cos(fleeAngle) * speed
-    food.dy = Math.sin(fleeAngle) * speed
-    food.facingAngle = fleeAngle
+    steerMouseVelocity(food, fleeAngle, speed, elapsed, 0.0085)
     food.pauseUntil = 0
-    food.nextTurnAt = now + 300
+    food.nextTurnAt = now + 220
     return
   }
 
@@ -197,9 +199,9 @@ function updateMouseMovement(food) {
 
   if (food.nextTurnAt > now) return
 
-  if (Math.random() < 0.28) {
-    food.pauseUntil = now + 350 + Math.random() * 900
-    food.nextTurnAt = food.pauseUntil + 300 + Math.random() * 900
+  if (Math.random() < 0.12) {
+    food.pauseUntil = now + 140 + Math.random() * 360
+    food.nextTurnAt = food.pauseUntil + 220 + Math.random() * 520
     food.dx = 0
     food.dy = 0
     return
@@ -211,10 +213,53 @@ function updateMouseMovement(food) {
   var wanderAngle = Math.atan2(wanderY, wanderX)
   var wanderSpeed = Math.sqrt(velocity.dx * velocity.dx + velocity.dy * velocity.dy)
 
-  food.dx = Math.cos(wanderAngle) * wanderSpeed
-  food.dy = Math.sin(wanderAngle) * wanderSpeed
-  food.facingAngle = wanderAngle
-  food.nextTurnAt = now + 450 + Math.random() * 1200
+  steerMouseVelocity(food, wanderAngle, wanderSpeed, elapsed, 0.0065)
+  food.nextTurnAt = now + 260 + Math.random() * 720
+}
+
+function steerMouseVelocity(food, targetAngle, targetSpeed, elapsed, turnRatePerMs) {
+  var currentSpeed = Math.hypot(food.dx, food.dy)
+  var currentAngle = currentSpeed > 0.001
+    ? Math.atan2(food.dy, food.dx)
+    : (food.facingAngle || targetAngle)
+  var maxTurn = Math.max(0.04, Math.min(0.42, elapsed * turnRatePerMs))
+  var nextAngle = turnTowardAngle(currentAngle, targetAngle, maxTurn)
+  var nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * 0.32
+
+  food.dx = Math.cos(nextAngle) * nextSpeed
+  food.dy = Math.sin(nextAngle) * nextSpeed
+  food.targetFacingAngle = nextAngle
+}
+
+function updateEntityFacingForMovement(entity) {
+  var targetAngle = Math.atan2(entity.dy, entity.dx)
+
+  if (entity.type === 'mouse' || entity.type === 'golden-mouse') {
+    entity.targetFacingAngle = targetAngle
+    if (entity.facingAngle === undefined) entity.facingAngle = targetAngle
+    return
+  }
+
+  entity.facingAngle = targetAngle
+}
+
+function smoothMouseFacingAngle(mouse) {
+  if (Math.abs(mouse.dx || 0) + Math.abs(mouse.dy || 0) < 0.001) return
+
+  var now = Date.now()
+  var elapsed = Math.max(0, Math.min(80, now - (mouse.lastFacingUpdateAt || now)))
+  mouse.lastFacingUpdateAt = now
+  var targetAngle = mouse.targetFacingAngle !== undefined
+    ? mouse.targetFacingAngle
+    : Math.atan2(mouse.dy, mouse.dx)
+
+  if (mouse.facingAngle === undefined) mouse.facingAngle = targetAngle
+
+  mouse.facingAngle = turnTowardAngle(
+    mouse.facingAngle,
+    targetAngle,
+    Math.max(0.025, Math.min(0.2, elapsed * 0.0032))
+  )
 }
 
 function getEdgeAvoidanceVector(food) {
@@ -266,7 +311,7 @@ function applyRoundedArenaBounds(entity, padding) {
   )
   entity.dx = Math.cos(softHeading) * speed
   entity.dy = Math.sin(softHeading) * speed
-  entity.facingAngle = Math.atan2(entity.dy, entity.dx)
+  updateEntityFacingForMovement(entity)
 }
 
 function applyRoundedSnakeBounds() {
