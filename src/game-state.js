@@ -47,6 +47,7 @@ var snakeTailPoint = { x: 0, y: 0 }
 var snakeSegmentGrowthProgress = []
 var snakeSegmentGrowthStartedAt = []
 var snakeSlitherWaveAvailability = []
+var lastPlayerEnemyContactAt = 0
 var snakeSegmentGrowthDuration = 850
 var snakeSegmentGrowthStagger = 180
 var steerTarget
@@ -84,11 +85,16 @@ var coilSlashEntryTargetTurn = Math.PI * 2
 var coilSlashEntrySpeedMultiplier = 2.6
 var coilSlashPivotX = 0
 var coilSlashPivotY = 0
+var coilSlashAnchorX = 0
+var coilSlashAnchorY = 0
+var coilSlashAnchorAngle = 0
 var coilSlashStrikeDistanceRemaining = 0
 var coilSlashStrikeDistanceTotal = 0
+var coilSlashStrikeReturnDistanceRemaining = 0
 var coilSlashStrikeCharge = 0
+var coilSlashStrikeReturning = false
 var coilSlashMinChargeToStrike = 0.035
-var coilSlashFeedSpeedMultiplier = 20
+var coilSlashFeedSpeedMultiplier = 18
 var coilSlashMinDistance = 64
 var coilSlashStartingMaxDistance = 112
 var coilSlashMaxDistance = 360
@@ -181,6 +187,32 @@ function getPlayerVisibleSegmentCountForScore(nextScore) {
 
 function getPlayerVisibleSegmentCount() {
   return getPlayerVisibleSegmentCountForScore(score)
+}
+
+function sampleTrailAtDistance(trail, targetDistance) {
+  if (!trail || trail.length === 0) return undefined
+
+  var newestPointIndex = trail.length - 1
+  var newerPoint = trail[newestPointIndex]
+  var accumulatedLength = 0
+
+  for (var olderPointIndex = newestPointIndex - 1; olderPointIndex >= 0; olderPointIndex--) {
+    var olderPoint = trail[olderPointIndex]
+    var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
+
+    if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
+      var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
+      return {
+        x: newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress,
+        y: newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress,
+      }
+    }
+
+    accumulatedLength += edgeLength
+    newerPoint = olderPoint
+  }
+
+  return trail[0]
 }
 var gameAudioContext
 var rivalAudioContext

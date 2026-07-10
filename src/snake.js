@@ -5,7 +5,7 @@ var playerTongueFlickStartedAt = 0
 var playerTongueDoubleFlick = false
 
 function drawSnake() {
-  if (isCoilSlashCharging()) {
+  if (isCoilSlashCharging() || isCoilSlashStriking()) {
     drawCoilSlashSnake()
     return
   }
@@ -664,6 +664,8 @@ function applyRegularSnakeSlither() {
     12 * renderScale * playerSizeScale * boostSlitherMultiplier,
     playerSegmentSpacing * regularSlitherAmplitude * boostSlitherMultiplier
   )
+  var contactRecoveryProgress = Math.min(1, Math.max(0, (now - lastPlayerEnemyContactAt) / 260))
+  waveAmplitude *= contactRecoveryProgress * contactRecoveryProgress * (3 - 2 * contactRecoveryProgress)
 
   for (var segmentIndex = 0; segmentIndex < x.length; segmentIndex++) {
     var leaderX = segmentIndex === 0 ? snakeHead.x : x[segmentIndex - 1]
@@ -782,45 +784,65 @@ function constrainRegularSnakeSegmentSpacing() {
 
 function updateSnakeBodyForCoilSlash() {
   var now = Date.now()
-  var feedDistance = getCoilSlashFeedDistance(now)
-  coilSlashChargeProgress = getCoilSlashChargeProgress(now)
+  var springSegments = Math.min(n, getCoilSlashSCurveSegmentCount())
+  var springBodyLength = Math.max(playerSegmentSpacing, springSegments * playerSegmentSpacing)
+  var charge
 
-  var naturalFeedDistance = Math.max(0, feedDistance - playerSegmentSpacing)
+  if (isCoilSlashStriking()) {
+    charge = Math.max(coilSlashMinChargeToStrike, Math.min(1, coilSlashStrikeCharge))
+    coilSlashChargeProgress = charge
+  } else {
+    coilSlashChargeProgress = getCoilSlashChargeProgress(now)
+    charge = Math.max(0, Math.min(1, coilSlashChargeProgress))
+  }
+
+  var naturalFeedDistance = Math.max(0, springBodyLength * charge - playerSegmentSpacing)
   var normalBody = sampleSnakeBodyFromTrail(naturalFeedDistance)
   if (!normalBody) return
 
   x.length = n
   y.length = n
 
-  var charge = Math.max(0, Math.min(1, coilSlashChargeProgress))
-  var forwardX = Math.cos(headingAngle)
-  var forwardY = Math.sin(headingAngle)
+  var poseAngle = isCoilSlashStriking() ? coilSlashAnchorAngle : headingAngle
+  var poseHeadX = isCoilSlashStriking() ? coilSlashAnchorX : snakeHead.x
+  var poseHeadY = isCoilSlashStriking() ? coilSlashAnchorY : snakeHead.y
+  var forwardX = Math.cos(poseAngle)
+  var forwardY = Math.sin(poseAngle)
   var sideX = -forwardY
   var sideY = forwardX
-  var springSegments = Math.min(n, getCoilSlashSCurveSegmentCount())
-  var maxLoadedSegments = Math.min(springSegments + 1, charge * (springSegments + 1))
-  var springLength = Math.max(playerSegmentSpacing, springSegments * playerSegmentSpacing)
-  var springAmplitude = playerSegmentSpacing * (0.85 + charge * 0.35)
-  var springWaves = 2.15
+  var naturalTurnRadius = getCoilSlashNaturalTurnRadius()
+  var springDepth = Math.max(springBodyLength * 0.46, naturalTurnRadius * 4.35)
+  var springAmplitude = naturalTurnRadius
+  var sharedSpringBlend = charge * charge * (3 - 2 * charge)
+  var strikeStraighten = getCoilSlashStrikeStraightenProgress()
 
   for (var segmentIndex = 0; segmentIndex < n; segmentIndex++) {
-    var loadBlend = Math.max(0, Math.min(1, maxLoadedSegments - segmentIndex))
+    var segmentSpringBlend = segmentIndex < springSegments
+      ? sharedSpringBlend
+      : 0
     var naturalX = normalBody.x[segmentIndex]
     var naturalY = normalBody.y[segmentIndex]
 
     if (segmentIndex < springSegments) {
-      var springProgress = (segmentIndex + 1) / Math.max(1, springSegments)
-      var along = springProgress * springLength
-      var waveFade = Math.sin(springProgress * Math.PI)
-      var sideOffset = Math.sin(springProgress * Math.PI * springWaves) *
-        springAmplitude *
-        waveFade *
-        coilSlashEntryDirection
-      var targetX = snakeHead.x - forwardX * along + sideX * sideOffset
-      var targetY = snakeHead.y - forwardY * along + sideY * sideOffset
+      var springPoint = sampleCoilSlashSpringPoint(
+        (segmentIndex + 1) * playerSegmentSpacing,
+        springDepth,
+        springAmplitude,
+        forwardX,
+        forwardY,
+        sideX,
+        sideY,
+        poseHeadX,
+        poseHeadY
+      )
+      var straightDistance = (segmentIndex + 1) * playerSegmentSpacing
+      var straightX = snakeHead.x - forwardX * straightDistance
+      var straightY = snakeHead.y - forwardY * straightDistance
+      var targetX = springPoint.x + (straightX - springPoint.x) * strikeStraighten
+      var targetY = springPoint.y + (straightY - springPoint.y) * strikeStraighten
 
-      x[segmentIndex] = naturalX + (targetX - naturalX) * loadBlend
-      y[segmentIndex] = naturalY + (targetY - naturalY) * loadBlend
+      x[segmentIndex] = naturalX + (targetX - naturalX) * segmentSpringBlend
+      y[segmentIndex] = naturalY + (targetY - naturalY) * segmentSpringBlend
     } else {
       x[segmentIndex] = naturalX
       y[segmentIndex] = naturalY
@@ -830,8 +852,126 @@ function updateSnakeBodyForCoilSlash() {
   snakeTailPoint.x = normalBody.tailX
   snakeTailPoint.y = normalBody.tailY
 
-  applySnakeCornerCut(normalBody.x, normalBody.y)
   constrainCoilSlashSegmentSpacing()
+}
+
+function getCoilSlashStrikeStraightenProgress() {
+  if (!isCoilSlashStriking() || coilSlashStrikeDistanceTotal <= 0) return 0
+
+  var extension = coilSlashStrikeReturning
+    ? coilSlashStrikeReturnDistanceRemaining
+    : coilSlashStrikeDistanceTotal - coilSlashStrikeDistanceRemaining
+  var progress = Math.max(0, Math.min(1, extension / coilSlashStrikeDistanceTotal))
+
+  return progress * progress * (3 - 2 * progress)
+}
+
+function getCoilSlashNaturalTurnRadius() {
+  var currentSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
+  if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
+
+  return Math.max(
+    playerSegmentSpacing * 2.35,
+    currentSpeed / Math.max(0.001, getPlayerTurnRate())
+  )
+}
+
+function sampleCoilSlashSpringPoint(targetDistance, springDepth, springAmplitude, forwardX, forwardY, sideX, sideY, headX, headY) {
+  var previousPoint = getCoilSlashSpringPointAtProgress(
+    0,
+    springDepth,
+    springAmplitude,
+    forwardX,
+    forwardY,
+    sideX,
+    sideY,
+    headX,
+    headY
+  )
+  var accumulatedDistance = 0
+  var sampleCount = 96
+
+  for (var sampleIndex = 1; sampleIndex <= sampleCount; sampleIndex++) {
+    var progress = sampleIndex / sampleCount
+    var nextPoint = getCoilSlashSpringPointAtProgress(
+      progress,
+      springDepth,
+      springAmplitude,
+      forwardX,
+      forwardY,
+      sideX,
+      sideY,
+      headX,
+      headY
+    )
+    var edgeLength = Math.hypot(nextPoint.x - previousPoint.x, nextPoint.y - previousPoint.y)
+
+    if (edgeLength > 0 && accumulatedDistance + edgeLength >= targetDistance) {
+      var edgeProgress = (targetDistance - accumulatedDistance) / edgeLength
+      return {
+        x: previousPoint.x + (nextPoint.x - previousPoint.x) * edgeProgress,
+        y: previousPoint.y + (nextPoint.y - previousPoint.y) * edgeProgress,
+      }
+    }
+
+    accumulatedDistance += edgeLength
+    previousPoint = nextPoint
+  }
+
+  return previousPoint
+}
+
+function getCoilSlashSpringPointAtProgress(progress, springDepth, springAmplitude, forwardX, forwardY, sideX, sideY, headX, headY) {
+  var localPoint = sampleNaturalRadiusCoilArc(progress, springAmplitude, springDepth)
+
+  return {
+    x: headX - forwardX * localPoint.back - sideX * localPoint.side * coilSlashEntryDirection,
+    y: headY - forwardY * localPoint.back - sideY * localPoint.side * coilSlashEntryDirection,
+  }
+}
+
+function sampleNaturalRadiusCoilArc(progress, turnRadius, springDepth) {
+  var clampedProgress = Math.max(0, Math.min(1, progress))
+  var maxArcAngle = Math.PI * 1.72
+  var settleLength = Math.max(playerSegmentSpacing, springDepth * 0.08)
+  var arcLength = turnRadius * maxArcAngle
+  var totalLength = arcLength * 2 + settleLength
+  var targetLength = clampedProgress * totalLength
+  var stepLength = Math.max(2, playerSegmentSpacing * 0.22)
+  var steps = Math.max(8, Math.ceil(targetLength / stepLength))
+  var back = playerSegmentSpacing * 1.35 + turnRadius * 0.32
+  var side = 0
+  var angle = 0
+
+  for (var step = 0; step < steps; step++) {
+    var distanceAtStep = step / steps * targetLength
+    var distanceAtNextStep = (step + 1) / steps * targetLength
+    var segmentLength = distanceAtNextStep - distanceAtStep
+    var curvature = getCoilArcCurvatureAtDistance(distanceAtStep, arcLength, settleLength, turnRadius)
+
+    angle += curvature * segmentLength
+    back += Math.cos(angle) * segmentLength
+    side += Math.sin(angle) * segmentLength
+  }
+
+  return {
+    back: back,
+    side: side,
+  }
+}
+
+function getCoilArcCurvatureAtDistance(distance, arcLength, settleLength, turnRadius) {
+  if (distance < arcLength) {
+    return 1 / turnRadius
+  }
+
+  if (distance < arcLength + settleLength) {
+    var settleProgress = (distance - arcLength) / settleLength
+    var easedProgress = settleProgress * settleProgress * (3 - 2 * settleProgress)
+    return (1 - easedProgress * 2) / turnRadius
+  }
+
+  return -1 / turnRadius
 }
 
 function constrainCoilSlashSegmentSpacing() {
@@ -917,6 +1057,53 @@ function sampleSnakeBodyFromTrail(trailAdvanceDistance) {
     tailX: tailX,
     tailY: tailY,
   }
+}
+
+function rebuildSnakeTrailFromCurrentSnakePose() {
+  var posePoints = []
+
+  posePoints.push({
+    x: snakeTailPoint.x,
+    y: snakeTailPoint.y,
+  })
+
+  for (var segmentIndex = x.length - 1; segmentIndex >= 0; segmentIndex--) {
+    posePoints.push({
+      x: x[segmentIndex],
+      y: y[segmentIndex],
+    })
+  }
+
+  posePoints.push({
+    x: snakeHead.x,
+    y: snakeHead.y,
+  })
+
+  snakeTrail = []
+
+  for (var pointIndex = 0; pointIndex < posePoints.length - 1; pointIndex++) {
+    var startPoint = posePoints[pointIndex]
+    var endPoint = posePoints[pointIndex + 1]
+    var dx = endPoint.x - startPoint.x
+    var dy = endPoint.y - startPoint.y
+    var distance = Math.hypot(dx, dy)
+    var steps = Math.max(1, Math.ceil(distance / Math.max(1.5, 2.5 * renderScale)))
+
+    for (var step = 0; step < steps; step++) {
+      var progress = step / steps
+      snakeTrail.push({
+        x: startPoint.x + dx * progress,
+        y: startPoint.y + dy * progress,
+      })
+    }
+  }
+
+  snakeTrail.push({
+    x: snakeHead.x,
+    y: snakeHead.y,
+  })
+
+  trimSnakeTrail()
 }
 
 function getSnakeSegmentTrailDistance(segmentIndex, isTailPoint) {

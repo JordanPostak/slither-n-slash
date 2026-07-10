@@ -525,21 +525,6 @@ function getMousePawStep(walkPhase, phaseOffset, isMoving) {
   }
 }
 
-function drawMouseSpriteWhiskerSpark(isGolden) {
-  ctx.strokeStyle = isGolden ? '#fff4bd' : '#eadbd1'
-  ctx.lineWidth = 0.65
-  ctx.beginPath()
-  ctx.moveTo(16.8, -1.5)
-  ctx.lineTo(23.2, -5)
-  ctx.moveTo(17.2, -0.4)
-  ctx.lineTo(24.5, -1.4)
-  ctx.moveTo(16.8, 1.5)
-  ctx.lineTo(23.2, 5)
-  ctx.moveTo(17.2, 0.4)
-  ctx.lineTo(24.5, 1.4)
-  ctx.stroke()
-}
-
 function drawMouseLegs(legStep, isGolden) {
   ctx.lineCap = 'round'
   ctx.strokeStyle = 'rgba(54, 39, 34, 0.88)'

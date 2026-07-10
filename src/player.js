@@ -25,6 +25,9 @@ function moveSnakeHead() {
       return
     }
 
+    snakeHead.x = coilSlashAnchorX
+    snakeHead.y = coilSlashAnchorY
+    coilSlashAnchorAngle = headingAngle
     coilSlashEntryStrikeAngle = headingAngle
     updateSnakeBodyFromTrail()
     return
@@ -32,15 +35,19 @@ function moveSnakeHead() {
 
   if (isCoilSlashStriking()) {
     moveSnakeHeadForCoilSlashStrike()
-    applyRoundedSnakeBounds()
-    recordSnakeHeadTrail()
-    updateSnakeBodyFromTrail()
+    if (isCoilSlashStriking()) {
+      updateSnakeBodyForCoilSlash()
+    } else {
+      updateSnakeBodyFromTrail(true)
+    }
     return
   }
 
   var currentSpeed = snakeSpeed * motionScale * getPlayerSpeedScale()
   if (isBerserkerActive()) currentSpeed *= berserkerSpeedMultiplier
   if (boosting) currentSpeed *= boostMultiplier
+
+  softenPlayerWallApproach(currentTurnRate, currentSpeed)
 
   snakeHead.x += Math.cos(headingAngle) * currentSpeed
   snakeHead.y += Math.sin(headingAngle) * currentSpeed
@@ -52,8 +59,37 @@ function moveSnakeHead() {
   updateSnakeBodyFromTrail()
 }
 
+function softenPlayerWallApproach(currentTurnRate, currentSpeed) {
+  var wallPadding = Math.max(18 * renderScale * getPlayerSizeScale(), currentSpeed * 4.2)
+  var wallTurnRate = currentTurnRate * 1.85
+  var futureX = snakeHead.x + Math.cos(headingAngle) * currentSpeed * 2.2
+  var futureY = snakeHead.y + Math.sin(headingAngle) * currentSpeed * 2.2
+
+  if (futureX < wallPadding) {
+    headingAngle = getSoftWallHeading(headingAngle, 1, 0, wallTurnRate)
+  } else if (futureX > canvas.width - wallPadding) {
+    headingAngle = getSoftWallHeading(headingAngle, -1, 0, wallTurnRate)
+  }
+
+  if (futureY < wallPadding) {
+    headingAngle = getSoftWallHeading(headingAngle, 0, 1, wallTurnRate)
+  } else if (futureY > canvas.height - wallPadding) {
+    headingAngle = getSoftWallHeading(headingAngle, 0, -1, wallTurnRate)
+  }
+
+  var roundedCorrection = getRoundedArenaCorrection(futureX, futureY, 0)
+  if (roundedCorrection) {
+    headingAngle = getSoftWallHeading(
+      headingAngle,
+      -roundedCorrection.normalX,
+      -roundedCorrection.normalY,
+      wallTurnRate
+    )
+  }
+}
+
 function softenPlayerWallTurn(currentTurnRate) {
-  var wallTurnRate = currentTurnRate * 2.4
+  var wallTurnRate = currentTurnRate * 1.55
 
   if (snakeHead.x < 0) {
     snakeHead.x = 0
@@ -191,9 +227,14 @@ function resetBoost() {
   coilSlashEntrySettleProgress = 0
   coilSlashPivotX = 0
   coilSlashPivotY = 0
+  coilSlashAnchorX = 0
+  coilSlashAnchorY = 0
+  coilSlashAnchorAngle = 0
   coilSlashStrikeDistanceRemaining = 0
   coilSlashStrikeDistanceTotal = 0
+  coilSlashStrikeReturnDistanceRemaining = 0
   coilSlashStrikeCharge = 0
+  coilSlashStrikeReturning = false
   mobileCoilSlashActive = false
   touchBoosting = false
   releaseMobileControls()
@@ -224,7 +265,7 @@ function isCoilSlashCharging() {
 }
 
 function isCoilSlashStriking() {
-  return coilSlashStrikeDistanceRemaining > 0
+  return coilSlashStrikeDistanceRemaining > 0 || coilSlashStrikeReturnDistanceRemaining > 0
 }
 
 function startCoilSlashEntry(now) {
@@ -248,6 +289,9 @@ function startCoilSlashEntry(now) {
   coilSlashEntrySettleProgress = 1
   coilSlashPivotX = snakeHead.x
   coilSlashPivotY = snakeHead.y
+  coilSlashAnchorX = snakeHead.x
+  coilSlashAnchorY = snakeHead.y
+  coilSlashAnchorAngle = headingAngle
 }
 
 function isCoilSlashEntryActive() {
@@ -374,9 +418,10 @@ function getCoilSlashChargeProgress(now) {
   if (!coilSlashHoldStartedAt) return 0
 
   var feedDistance = getCoilSlashFeedDistance(now)
+  var springSegments = Math.max(1, getCoilSlashSCurveSegmentCount())
   var bodyLength = Math.max(
     playerSegmentSpacing,
-    n * playerSegmentSpacing + getSnakeTailFollowDistance()
+    springSegments * playerSegmentSpacing
   )
 
   return Math.max(0, Math.min(1, feedDistance / bodyLength))
@@ -410,8 +455,13 @@ function releaseCoilSlash() {
   coilSlashEntryTurned = 0
   coilSlashEntrySettleProgress = 0
 
-  if (releasedCharge < coilSlashMinChargeToStrike) return
+  if (releasedCharge < coilSlashMinChargeToStrike) {
+    rebuildSnakeTrailFromCurrentSnakePose()
+    updateSnakeBodyFromTrail(true)
+    return
+  }
 
+  coilSlashAnchorAngle = headingAngle
   coilSlashStrikeCharge = releasedCharge
   var maxStrikeDistance = getCoilSlashMaxDistance()
   coilSlashStrikeDistanceTotal = (
@@ -419,21 +469,44 @@ function releaseCoilSlash() {
     (maxStrikeDistance - coilSlashMinDistance) * releasedCharge
   ) * getCoilSlashRangeScale()
   coilSlashStrikeDistanceRemaining = coilSlashStrikeDistanceTotal
+  coilSlashStrikeReturnDistanceRemaining = coilSlashStrikeDistanceTotal
+  coilSlashStrikeReturning = false
 }
 
 function moveSnakeHeadForCoilSlashStrike() {
   var strikeSpeed = coilSlashStrikeSpeed * motionScale * getCoilSlashRangeScale()
   if (isBerserkerActive()) strikeSpeed *= berserkerSpeedMultiplier
 
-  var travel = Math.min(coilSlashStrikeDistanceRemaining, strikeSpeed)
-  snakeHead.x += Math.cos(headingAngle) * travel
-  snakeHead.y += Math.sin(headingAngle) * travel
-  coilSlashStrikeDistanceRemaining -= travel
+  if (!coilSlashStrikeReturning) {
+    var outboundTravel = Math.min(coilSlashStrikeDistanceRemaining, strikeSpeed)
+    snakeHead.x += Math.cos(headingAngle) * outboundTravel
+    snakeHead.y += Math.sin(headingAngle) * outboundTravel
+    coilSlashStrikeDistanceRemaining -= outboundTravel
 
-  if (coilSlashStrikeDistanceRemaining <= 0) {
+    if (coilSlashStrikeDistanceRemaining <= 0) {
+      coilSlashStrikeDistanceRemaining = 0
+      coilSlashStrikeReturning = true
+    }
+
+    return
+  }
+
+  var returnTravel = Math.min(coilSlashStrikeReturnDistanceRemaining, strikeSpeed * 1.18)
+  snakeHead.x -= Math.cos(headingAngle) * returnTravel
+  snakeHead.y -= Math.sin(headingAngle) * returnTravel
+  coilSlashStrikeReturnDistanceRemaining -= returnTravel
+
+  if (coilSlashStrikeReturnDistanceRemaining <= 0) {
+    snakeHead.x = coilSlashAnchorX
+    snakeHead.y = coilSlashAnchorY
+    headingAngle = coilSlashAnchorAngle
     coilSlashStrikeDistanceRemaining = 0
     coilSlashStrikeDistanceTotal = 0
+    coilSlashStrikeReturnDistanceRemaining = 0
     coilSlashStrikeCharge = 0
+    coilSlashChargeProgress = 0
+    coilSlashStrikeReturning = false
+    rebuildSnakeTrailFromCurrentSnakePose()
   }
 }
 

@@ -801,29 +801,7 @@ function getBadSnakeTrailLength(enemySnake) {
 }
 
 function sampleBadSnakeTrailAtDistance(enemySnake, targetDistance) {
-  if (!enemySnake.trail || enemySnake.trail.length === 0) return undefined
-
-  var newestPointIndex = enemySnake.trail.length - 1
-  var newerPoint = enemySnake.trail[newestPointIndex]
-  var accumulatedLength = 0
-
-  for (var olderPointIndex = newestPointIndex - 1; olderPointIndex >= 0; olderPointIndex--) {
-    var olderPoint = enemySnake.trail[olderPointIndex]
-    var edgeLength = Math.hypot(newerPoint.x - olderPoint.x, newerPoint.y - olderPoint.y)
-
-    if (edgeLength > 0 && accumulatedLength + edgeLength >= targetDistance) {
-      var edgeProgress = (targetDistance - accumulatedLength) / edgeLength
-      return {
-        x: newerPoint.x + (olderPoint.x - newerPoint.x) * edgeProgress,
-        y: newerPoint.y + (olderPoint.y - newerPoint.y) * edgeProgress,
-      }
-    }
-
-    accumulatedLength += edgeLength
-    newerPoint = olderPoint
-  }
-
-  return enemySnake.trail[0]
+  return sampleTrailAtDistance(enemySnake.trail, targetDistance)
 }
 
 function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {

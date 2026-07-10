@@ -330,7 +330,7 @@ function applyRoundedSnakeBounds() {
     headingAngle,
     -correction.normalX,
     -correction.normalY,
-    getPlayerTurnRate() * 2.4
+    getPlayerTurnRate() * 1.55
   )
 }
 

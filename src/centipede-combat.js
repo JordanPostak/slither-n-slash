@@ -8,21 +8,7 @@ function bouncePlayerOffBadSnake(contactX, contactY, predatorScale) {
   )
   predatorScale = predatorScale || 1
   var effectiveScale = Math.sqrt(predatorScale)
-  var separation = 23 * renderScale * effectiveScale
-  var distance = Math.hypot(snakeHead.x - contactX, snakeHead.y - contactY)
-  var pushDistance = Math.max(
-    1.2 * renderScale,
-    Math.min(4.5 * renderScale * effectiveScale, (separation - distance) * 0.28)
-  )
-
-  snakeHead.x += normal.x * pushDistance
-  snakeHead.y += normal.y * pushDistance
-  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 1.65)
-  steerTarget = undefined
-  steerAngleTarget = undefined
-  applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail(true)
+  deflectPlayerSnakeFromContact(normal.x, normal.y, getPlayerTurnRate() * 1.65 * effectiveScale)
 }
 
 function bounceSnakeHeadsApart(enemySnake) {
@@ -34,19 +20,12 @@ function bounceSnakeHeadsApart(enemySnake) {
   var predatorScale = enemySnake.collisionScale || 1
   var pushDistance = 3 * renderScale * Math.sqrt(predatorScale)
 
-  snakeHead.x += normal.x * pushDistance * 0.75
-  snakeHead.y += normal.y * pushDistance * 0.75
   moveBadSnake(enemySnake, -normal.x * pushDistance, -normal.y * pushDistance)
 
-  headingAngle = getSoftCollisionHeading(headingAngle, normal.x, normal.y, getPlayerTurnRate() * 1.65)
+  deflectPlayerSnakeFromContact(normal.x, normal.y, getPlayerTurnRate() * 1.65)
   enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, -normal.x, -normal.y, badSnakeTurnRate * 2.2)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 500
-  steerTarget = undefined
-  steerAngleTarget = undefined
-  applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail(true)
 }
 
 function slidePlayerOffBadSnake(contactX, contactY, predatorScale) {
@@ -56,15 +35,7 @@ function slidePlayerOffBadSnake(contactX, contactY, predatorScale) {
     headingAngle
   )
   var effectiveScale = Math.sqrt(predatorScale || 1)
-  var pushDistance = 2.4 * renderScale * effectiveScale
-
-  snakeHead.x += normal.x * pushDistance
-  snakeHead.y += normal.y * pushDistance
-  steerTarget = undefined
-  steerAngleTarget = undefined
-  applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail(true)
+  deflectPlayerSnakeFromContact(normal.x, normal.y, getPlayerTurnRate() * 1.25 * effectiveScale)
 }
 
 function slideSnakeHeadsApart(enemySnake) {
@@ -75,17 +46,18 @@ function slideSnakeHeadsApart(enemySnake) {
   )
   var pushDistance = 2.6 * renderScale * Math.sqrt(enemySnake.collisionScale || 1)
 
-  snakeHead.x += normal.x * pushDistance
-  snakeHead.y += normal.y * pushDistance
   moveBadSnake(enemySnake, -normal.x * pushDistance, -normal.y * pushDistance)
+  deflectPlayerSnakeFromContact(normal.x, normal.y, getPlayerTurnRate() * 1.25)
   enemySnake.heading = getSoftCollisionHeading(enemySnake.heading, -normal.x, -normal.y, badSnakeTurnRate * 1.6)
   enemySnake.wanderAngle = enemySnake.heading
   enemySnake.nextWanderAt = Date.now() + 350
+}
+
+function deflectPlayerSnakeFromContact(normalX, normalY, maxTurn) {
+  lastPlayerEnemyContactAt = Date.now()
+  headingAngle = getSoftCollisionHeading(headingAngle, normalX, normalY, maxTurn)
   steerTarget = undefined
   steerAngleTarget = undefined
-  applyRoundedSnakeBounds()
-  recordSnakeHeadTrail()
-  updateSnakeBodyFromTrail(true)
 }
 
 function pushBadSnakeAwayFromDominantPlayer(enemySnake, playerContactX, playerContactY, enemyContactX, enemyContactY) {
@@ -116,20 +88,6 @@ function getCollisionNormal(dx, dy, incomingHeading) {
     x: dx / distance,
     y: dy / distance,
   }
-}
-
-function getReflectedHeading(incomingHeading, normalX, normalY) {
-  var velocityX = Math.cos(incomingHeading)
-  var velocityY = Math.sin(incomingHeading)
-  var velocityAlongNormal = velocityX * normalX + velocityY * normalY
-
-  if (velocityAlongNormal >= 0) {
-    return Math.atan2(normalY, normalX)
-  }
-
-  var reflectedX = velocityX - 2 * velocityAlongNormal * normalX
-  var reflectedY = velocityY - 2 * velocityAlongNormal * normalY
-  return Math.atan2(reflectedY, reflectedX)
 }
 
 function getSoftCollisionHeading(incomingHeading, normalX, normalY, maxTurn) {

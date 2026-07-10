@@ -10,59 +10,59 @@ var snakeSkinConfigs = {
 
 function loadPlayerSnakeSkin(skinNumber) {
   var resolvedSkinNumber = snakeSkinConfigs[Number(skinNumber)] ? Number(skinNumber) : 1
-  var config = snakeSkinConfigs[resolvedSkinNumber]
-  var basePath = './assets/' + config.folder + '/' + config.prefix
-  var skinImages = []
+  var loadedSkin = loadSnakeSkinImages(resolvedSkinNumber)
 
   selectedSnakeSkin = resolvedSkinNumber
-  wormHeadImage = new Image()
-  wormTailImage = new Image()
-  wormBodyImages = []
-
-  wormHeadImage.src = basePath + '-head.png'
-  wormTailImage.src = basePath + '-tail.png'
-  skinImages.push(wormHeadImage, wormTailImage)
-
-  for (var bodyIndex = 1; bodyIndex <= config.bodyCount; bodyIndex++) {
-    var bodyImage = new Image()
-    bodyImage.src = basePath + '-body' + bodyIndex + '.png'
-    wormBodyImages.push(bodyImage)
-    skinImages.push(bodyImage)
-  }
+  wormHeadImage = loadedSkin.head
+  wormTailImage = loadedSkin.tail
+  wormBodyImages = loadedSkin.bodies
 
   try {
     window.localStorage.setItem('slitherNSlashPlayerSkin', String(selectedSnakeSkin))
   } catch (error) {}
 
   setupHeroSnakePreview()
-  return Promise.all(skinImages.map(waitForPlayerSkinImage)).then(function () {
+  return Promise.all(loadedSkin.images.map(waitForPlayerSkinImage)).then(function () {
     drawHeroSnakePreview()
   })
 }
 
 function loadTreeSnakeSkin(skinNumber) {
   var resolvedSkinNumber = snakeSkinConfigs[Number(skinNumber)] ? Number(skinNumber) : 1
-  var config = snakeSkinConfigs[resolvedSkinNumber]
-  var basePath = './assets/' + config.folder + '/' + config.prefix
-  var skinImages = []
+  var loadedSkin = loadSnakeSkinImages(resolvedSkinNumber)
 
   treeSnakeSkinNumber = resolvedSkinNumber
-  treeSnakeHeadImage = new Image()
-  treeSnakeTailImage = new Image()
-  treeSnakeBodyImages = []
+  treeSnakeHeadImage = loadedSkin.head
+  treeSnakeTailImage = loadedSkin.tail
+  treeSnakeBodyImages = loadedSkin.bodies
 
-  treeSnakeHeadImage.src = basePath + '-head.png'
-  treeSnakeTailImage.src = basePath + '-tail.png'
-  skinImages.push(treeSnakeHeadImage, treeSnakeTailImage)
+  return Promise.all(loadedSkin.images.map(waitForPlayerSkinImage))
+}
+
+function loadSnakeSkinImages(skinNumber) {
+  var config = snakeSkinConfigs[skinNumber]
+  var basePath = './assets/' + config.folder + '/' + config.prefix
+  var headImage = new Image()
+  var tailImage = new Image()
+  var bodyImages = []
+  var skinImages = [headImage, tailImage]
+
+  headImage.src = basePath + '-head.png'
+  tailImage.src = basePath + '-tail.png'
 
   for (var bodyIndex = 1; bodyIndex <= config.bodyCount; bodyIndex++) {
     var bodyImage = new Image()
     bodyImage.src = basePath + '-body' + bodyIndex + '.png'
-    treeSnakeBodyImages.push(bodyImage)
+    bodyImages.push(bodyImage)
     skinImages.push(bodyImage)
   }
 
-  return Promise.all(skinImages.map(waitForPlayerSkinImage))
+  return {
+    head: headImage,
+    tail: tailImage,
+    bodies: bodyImages,
+    images: skinImages,
+  }
 }
 
 function waitForPlayerSkinImage(image) {
