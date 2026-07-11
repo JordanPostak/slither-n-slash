@@ -87,7 +87,7 @@
         <div class="instruction-grid">
           <article><span>1</span><h3>Steer</h3><p>Use <b>A/D</b> or <b>Left/Right</b>. On mobile, drag the movement pad. Pause to reposition landscape controls.</p></article>
           <article><span>2</span><h3>Feed</h3><p>Eat grubs and orange balls to grow your score and progression. At 100 progression, large mice begin appearing and add six points. After their blue arrival shield fades, poison beetles remove 25% of your current progression.</p></article>
-          <article><span>3</span><h3>Boost &amp; Coil Strike</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost forward with a stronger slither. Hold <b>S</b> or <b>Down</b> to coil up, then release to strike. On mobile, hold the Boost box to sprint or drag down from it to start Coil Strike.</p></article>
+          <article><span>3</span><h3>Boost &amp; Coil Strike</h3><p>Hold <b>W</b>, <b>Up</b>, <b>Shift</b>, or <b>Space</b> to boost forward with a stronger slither. Hold <b>S</b> or <b>Down</b> to coil into a loaded S shape, aim while charging, then release to strike as far as the arrow has built. On mobile, hold the Boost box to sprint or drag down from it to start Coil Strike.</p></article>
           <article><span>4</span><h3>Trap</h3><p>Close any part of your body into a loop. Enclosed creatures progressively slow and turn orange; larger or longer creatures take more time relative to your snake. Keep the loop closed until they become food.</p></article>
         </div>
       </section>
@@ -108,7 +108,7 @@
           </figure>
           <figure class="game-preview preview-power">
             <div class="preview-scene"><span class="mini-snake"></span><span class="power-flare">&#9876;</span></div>
-            <figcaption><b>Power up</b><span>After 100 progression, the Golden Mouse can appear. It adds six points and starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls.</span></figcaption>
+            <figcaption><b>Power up</b><span>After 100 progression, the Golden Mouse can appear. It adds six points and starts Berserker mode. Fireballs burn only poison beetles, turning them into stationary orange balls. The arena is back on a darker dirt floor for better creature contrast.</span></figcaption>
           </figure>
         </div>
         <p class="mobile-swipe-hint" aria-hidden="true">Swipe to see more &#8594;</p>
@@ -211,12 +211,12 @@
         <div class="prose">
           <p>
             Slither N' Slash is an independent arcade game built by <b>Postak Creations</b>. It combines the
-            familiar satisfaction of growing a snake with smooth trail-following movement, Coil Slash strikes,
+            familiar satisfaction of growing a snake with smooth trail-following movement, Coil Strike attacks,
             moving prey, solid centipede combat, body-loop trapping, glowing rewards, and rare power-ups.
           </p>
           <p>
             The current build keeps the player snake fast and readable by capping the visible body at 50 pieces,
-            while score progression continues to expand the arena, increase thickness, extend Coil Slash capacity,
+            while score progression continues to expand the arena, increase thickness, extend Coil Strike capacity,
             and unlock bigger threats.
           </p>
           <p>
@@ -228,13 +228,14 @@
             The game is in active development. Planned additions include more arenas, creatures and power-ups,
             expanded accessibility settings, balance improvements, and an optional leaderboard.
           </p>
-          <p class="version-badge">Current release: <b>v0.5.2</b></p>
+          <p class="version-badge">Current release: <b>v0.5.3</b></p>
         </div>
       </section>
 
       <section id="news" class="content-section" aria-labelledby="news-title">
         <div class="section-heading"><p class="eyebrow">News &amp; changelog</p><h2 id="news-title">What's new</h2></div>
         <div class="changelog">
+          <article><time datetime="2026-07-10">July 10, 2026</time><h3>v0.5.3 — Coil Tuning &amp; Dirt Arena</h3><ul><li>Returned the arena to the dirt background and darkened it for stronger contrast against snakes, insects, mice, and orange rewards.</li><li>Refined Coil Strike into a charge-and-release attack: partial charges strike only as far as the visible arrow, then return.</li><li>Kept the front half of the snake as the spring-loaded strike section while the body slithers out from the coiled pose after the return.</li><li>Continued tuning the coil S-shape, strike return, and trail handoff to reduce body jumps after release.</li><li>Updated gameplay instructions and release notes for the latest controls and arena presentation.</li></ul></article>
           <article><time datetime="2026-07-07">July 7, 2026</time><h3>v0.5.2 — Coil Slash</h3><ul><li>Replaced standard boost with Coil Slash: hold to curl the head through an entry loop that respects the snake's normal turn radius before settling outside the pivot circle.</li><li>Added a growing strike arrow that builds with the length of body that has actually fed into the coil; max range can be held until the timing is right.</li><li>Release the control to launch forward; bites are strongest near the start of the strike and taper toward normal damage at the far end.</li><li>Updated desktop, mobile, and gamepad controls to use the new hold-to-coil and release-to-strike flow.</li><li>Refreshed public instructions and labels for the new Coil Slash mechanic.</li></ul></article>
           <article><time datetime="2026-07-06">July 6, 2026</time><h3>v0.5.1 — Progression &amp; Polish</h3><ul><li>Capped the visible player snake at 50 body pieces while score progression keeps scaling the arena, thickness, Coil Slash capacity, unlocks, and enemy pressure.</li><li>Kept large-snake movement responsive by preserving player speed and turn radius as the world zooms outward.</li><li>Added sporadic tongue flicks with occasional quick double flicks for the selected player snake.</li><li>Refined predator balance: centipedes steal three progression points per bite, large progression lets the player push centipedes aside, and Green Tree Snakes unlock after 100 progression.</li><li>Updated how-to-play, arena notes, FAQ, and documentation to explain progression, traps, power-ups, poison beetles, and orange rewards.</li></ul></article>
           <article><time datetime="2026-07-04">July 4, 2026</time><h3>v0.5.0 — Trap &amp; Transform</h3><ul><li>Added five selectable player snake skins before the first run.</li><li>Added body-loop traps for centipedes, grubs, mice, poison beetles, and larger predators.</li><li>Trapped creatures progressively slow and turn orange; transformation time now scales with their size and length compared with the player.</li><li>Reworked solid collisions, centipede bites, and trail-following snake movement.</li><li>Fireballs now burn only poison beetles into orange rewards, while Golden Mice activate Berserker mode.</li><li>Added two-second poison-beetle arrival protection and two-second post-Berserker recovery.</li><li>Improved mobile play mode, adjustable controls, page navigation, and responsive layouts.</li></ul></article>
@@ -246,7 +247,7 @@
         <div class="section-heading"><p class="eyebrow">FAQ</p><h2 id="faq-title">Good things to know</h2></div>
         <div class="faq-list">
           <details><summary>Is Slither N' Slash free?</summary><p>Yes. The game is free to play in your browser and does not require an account.</p></details>
-          <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and Coil Slash control. Landscape play provides the largest arena view, and you can pause to slide both control boxes to a comfortable height.</p></details>
+          <details><summary>Does it work on mobile?</summary><p>Yes. Phones and tablets use an on-screen movement pad and Coil Strike control. Landscape play provides the largest arena view, and you can pause to slide both control boxes to a comfortable height.</p></details>
           <details><summary>Can I save my progress?</summary><p>Your high score is stored in this browser. A paused run remains available while the page stays open, but active runs and high scores do not sync between devices.</p></details>
           <details><summary>How does trapping work?</summary><p>Make a closed loop with any part of your snake's body. Fully enclosed creatures progressively slow and turn orange without a separate trap ring. Larger or longer creatures take more time relative to your snake. Keep the loop intact until they become orange balls; if it opens early, they recover and escape.</p></details>
           <details><summary>How do power-ups work?</summary><p>Once your snake reaches 100 progression, the rare Golden Mouse can appear. It adds six points and activates ten seconds of Berserker mode, followed by two seconds of recovery that pushes food away. Fireballs burn poison beetles into safe orange rewards but do not harm centipedes.</p></details>

@@ -49,6 +49,12 @@ function animate() {
             continue
           }
 
+          if (foods[i].isBad && !isBerserkerActive() && (isCoilSlashCharging() || isCoilSlashStriking())) {
+            repelEntityFromSnake(foods[i], entitySwallowRadius + 14 * renderScale)
+            drawFood(foods[i])
+            continue
+          }
+
           if (foods[i].isBad && !isBerserkerActive()) {
             var poisonDamage = Math.max(1, Math.round(getPlayerProgressLength() * poisonBeetleDamageFraction))
             removePlayerSegments(poisonDamage)

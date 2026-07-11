@@ -1,6 +1,6 @@
 # Slither N' Slash
 
-Slither N' Slash is a standalone arcade snake game by Postak Creations. It features smooth trail-following movement, moving prey, solid centipede combat, rechargeable Coil Slash strikes, body-loop traps, power-ups, and responsive desktop and mobile controls.
+Slither N' Slash is a standalone arcade snake game by Postak Creations. It features smooth trail-following movement, moving prey, solid centipede combat, rechargeable boost, Coil Strike attacks, body-loop traps, power-ups, and responsive desktop and mobile controls.
 
 ## Play
 
@@ -8,8 +8,10 @@ Open `index.html` in a browser and select **Play Now** or **Start Game**.
 
 - Steer with Left/Right or A/D. Mobile players use the movement pad.
 - Before the first run, choose from five complete player snake skins. The selection is remembered in local browser storage.
-- Hold Coil Slash with Up/W, Shift, or Space. The head curls through an entry loop that respects the snake's normal turn radius and already charges the slash, so quick taps give short movement bursts. Holding longer settles the head outside the pivot circle, feeds more body into the coil, and grows the arrow.
-- The visible player snake caps at 50 body pieces, but score/progression keeps climbing. Progression still scales arena size, snake thickness, Coil Slash capacity, unlocks, and enemy pressure while the snake keeps the same speed and turning radius. The arena expands with a stronger centered zoom-out, making bugs and animals appear smaller and move more slowly as the snake advances. Centipedes can spawn with longer bodies.
+- Hold boost with Up/W, Shift, or Space to sprint forward with a stronger slither.
+- Hold Coil Strike with Down/S to coil into a loaded S shape. Aim while charging, then release to strike as far as the visible arrow has built. Partial charges still strike, but travel less distance before returning.
+- After a Coil Strike returns, the snake rebuilds its trail from the coiled pose and slithers out from that position.
+- The visible player snake caps at 50 body pieces, but score/progression keeps climbing. Progression still scales arena size, snake thickness, Coil Strike capacity, unlocks, and enemy pressure while the snake keeps the same speed and turning radius. The arena expands with a stronger centered zoom-out, making bugs and animals appear smaller and move more slowly as the snake advances. Centipedes can spawn with longer bodies.
 - Large regular and Golden Mice unlock at 100 progression. Either mouse adds six points; the Golden Mouse also activates Berserker mode.
 - Pause or exit immersive play mode without losing the current run. While paused in mobile landscape, drag the control handles to reposition them.
 - Grubs add one point and regular mice add six.
@@ -33,12 +35,14 @@ Completed transformations create stationary orange food. A trapped bug creates o
 
 ## Current release
 
-Version 0.5.2 — Coil Slash, released July 7, 2026.
+Version 0.5.3 — Coil Tuning & Dirt Arena, released July 10, 2026.
 
-- Replaced standard boost with Coil Slash: hold to curl the head through a turn-radius-safe entry loop before settling into the pivot circle.
-- Added a growing strike arrow that depends on how much body has actually fed into the coil; max range can be held, and bites are strongest near the start of the slash.
-- Updated desktop, mobile, and gamepad controls around the new hold-to-coil flow.
-- Visible player body caps at 50 pieces while progression continues to scale arena size, thickness, Coil Slash capacity, unlocks, and enemy pressure.
+- Returned the arena to the dirt background and darkened it for stronger creature contrast.
+- Refined Coil Strike so partial charges still strike, but only as far as the visible arrow has built before returning.
+- The front half of the snake acts as the spring-loaded strike section; after return, the snake rebuilds its trail from the coil pose and slithers out.
+- Continued tuning the coil S-shape, strike return, and trail handoff to reduce body jumps after release.
+- Updated desktop, mobile, and gamepad controls around boost and Coil Strike.
+- Visible player body caps at 50 pieces while progression continues to scale arena size, thickness, Coil Strike capacity, unlocks, and enemy pressure.
 - Player speed and turn radius stay responsive as the world zooms outward.
 - Player snake tongues now flick sporadically, with occasional quick double flicks.
 - Website gameplay notes, FAQ, and documentation now describe progression, trapping, power-ups, poison beetles, and orange rewards.
@@ -49,12 +53,12 @@ Version 0.5.2 — Coil Slash, released July 7, 2026.
 - `src/main.js` - startup wiring only
 - `src/game-state.js` - shared configuration and runtime state
 - `src/site-ui.js`, `src/hero-preview.js` - landing page, navigation, play mode, and hero art
-- `src/input.js`, `src/player.js`, `src/snake.js` - controls, player movement, Coil Slash, body trail, and rendering
+- `src/input.js`, `src/player.js`, `src/snake.js` - controls, player movement, Coil Strike, body trail, and rendering
 - `src/food.js`, `src/food-render.js`, `src/powerups.js` - prey, poison beetles, orange rewards, and power-ups
 - `src/centipedes.js`, `src/centipede-combat.js`, `src/centipede-render.js` - centipede AI, combat, and visuals
 - `src/traps.js`, `src/collisions.js`, `src/world.js` - trapping, collision response, arena movement, and bounds
 - `src/game-loop.js`, `src/audio-score.js` - frame orchestration, sound, score, and local high score
 - `src/styles.css` - responsive layout and game styling
+- `assets/dirt-background.png` - arena dirt background texture
 - `assets/dark-rock-background.png` - generated dark rock background texture
 - `audio/` - copied sound effects from the portfolio
-

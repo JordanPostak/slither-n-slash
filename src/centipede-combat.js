@@ -225,9 +225,8 @@ function getPlayerBiteSegments() {
     : snakeBiteSegments
 
   if (isCoilSlashStriking() && coilSlashStrikeDistanceTotal > 0) {
-    var strikeProgress = 1 - coilSlashStrikeDistanceRemaining / coilSlashStrikeDistanceTotal
-    var nearStrikeBonus = Math.ceil((1 - strikeProgress) * biteSegments)
-    return biteSegments + Math.max(1, nearStrikeBonus)
+    var chargeMultiplier = 1 + Math.max(0, Math.min(1, coilSlashStrikeCharge)) * 1.5
+    return Math.max(biteSegments + 1, Math.ceil(biteSegments * chargeMultiplier))
   }
 
   return biteSegments

@@ -25,8 +25,11 @@ function moveSnakeHead() {
       return
     }
 
-    snakeHead.x = coilSlashAnchorX
-    snakeHead.y = coilSlashAnchorY
+    var pivotHeadPoint = getCoilSlashHeadPointFromPivot(headingAngle)
+    snakeHead.x = pivotHeadPoint.x
+    snakeHead.y = pivotHeadPoint.y
+    coilSlashAnchorX = snakeHead.x
+    coilSlashAnchorY = snakeHead.y
     coilSlashAnchorAngle = headingAngle
     coilSlashEntryStrikeAngle = headingAngle
     updateSnakeBodyFromTrail()
@@ -230,6 +233,14 @@ function resetBoost() {
   coilSlashAnchorX = 0
   coilSlashAnchorY = 0
   coilSlashAnchorAngle = 0
+  coilSlashPoseReuseUntil = 0
+  coilSlashPoseReusePivotX = 0
+  coilSlashPoseReusePivotY = 0
+  coilSlashPoseReuseAnchorX = 0
+  coilSlashPoseReuseAnchorY = 0
+  coilSlashPoseReuseAnchorAngle = 0
+  coilSlashPoseReuseDirection = 1
+  coilSlashSmoothSpineUntil = 0
   coilSlashStrikeDistanceRemaining = 0
   coilSlashStrikeDistanceTotal = 0
   coilSlashStrikeReturnDistanceRemaining = 0
@@ -275,23 +286,85 @@ function startCoilSlashEntry(now) {
   coilSlashEntryStrikeAngle = headingAngle
   var turningLeft = pressedKeys.ArrowLeft || pressedKeys.a || pressedKeys.A
   var turningRight = pressedKeys.ArrowRight || pressedKeys.d || pressedKeys.D
+  var reusingLastPose = !turningLeft && !turningRight && canReuseCoilSlashPose(now)
 
-  if (turningLeft && !turningRight) {
+  if (reusingLastPose) {
+    coilSlashEntryDirection = coilSlashPoseReuseDirection
+  } else if (turningLeft && !turningRight) {
     coilSlashEntryDirection = -1
   } else if (turningRight && !turningLeft) {
     coilSlashEntryDirection = 1
   } else {
-    coilSlashEntryDirection = coilSlashNextEntryDirection
+    coilSlashEntryDirection = getPreferredCoilSlashDirectionFromBody() || coilSlashNextEntryDirection
   }
 
   coilSlashNextEntryDirection = -coilSlashEntryDirection
   coilSlashEntryTurned = coilSlashEntryTargetTurn
   coilSlashEntrySettleProgress = 1
-  coilSlashPivotX = snakeHead.x
-  coilSlashPivotY = snakeHead.y
-  coilSlashAnchorX = snakeHead.x
-  coilSlashAnchorY = snakeHead.y
-  coilSlashAnchorAngle = headingAngle
+
+  if (reusingLastPose) {
+    coilSlashPivotX = coilSlashPoseReusePivotX
+    coilSlashPivotY = coilSlashPoseReusePivotY
+    coilSlashAnchorX = coilSlashPoseReuseAnchorX
+    coilSlashAnchorY = coilSlashPoseReuseAnchorY
+    headingAngle = coilSlashPoseReuseAnchorAngle
+    coilSlashAnchorAngle = coilSlashPoseReuseAnchorAngle
+    coilSlashEntryStartAngle = headingAngle
+    coilSlashEntryStrikeAngle = headingAngle
+    snakeHead.x = coilSlashAnchorX
+    snakeHead.y = coilSlashAnchorY
+  } else {
+    var pivotPoint = getCoilSlashPivotPointFromHead(snakeHead.x, snakeHead.y, headingAngle)
+    coilSlashPivotX = pivotPoint.x
+    coilSlashPivotY = pivotPoint.y
+    coilSlashAnchorX = snakeHead.x
+    coilSlashAnchorY = snakeHead.y
+    coilSlashAnchorAngle = headingAngle
+  }
+
+}
+
+function getPreferredCoilSlashDirectionFromBody() {
+  if (x.length < 4) return 0
+
+  var sideX = -Math.sin(headingAngle)
+  var sideY = Math.cos(headingAngle)
+  var sideScore = 0
+  var sampleCount = Math.min(8, x.length)
+
+  for (var i = 1; i < sampleCount; i++) {
+    var bodyOffsetX = x[i] - snakeHead.x
+    var bodyOffsetY = y[i] - snakeHead.y
+    var weight = sampleCount - i
+
+    sideScore += (bodyOffsetX * sideX + bodyOffsetY * sideY) * weight
+  }
+
+  if (Math.abs(sideScore) < playerSegmentSpacing * 0.8) return 0
+
+  return sideScore > 0 ? 1 : -1
+}
+
+function rememberCoilSlashPose(now) {
+  if (!coilSlashPivotX && !coilSlashPivotY) return
+
+  coilSlashPoseReuseUntil = now + coilSlashPoseReuseDuration
+  coilSlashPoseReusePivotX = coilSlashPivotX
+  coilSlashPoseReusePivotY = coilSlashPivotY
+  coilSlashPoseReuseAnchorX = coilSlashAnchorX
+  coilSlashPoseReuseAnchorY = coilSlashAnchorY
+  coilSlashPoseReuseAnchorAngle = coilSlashAnchorAngle || headingAngle
+  coilSlashPoseReuseDirection = coilSlashEntryDirection
+}
+
+function canReuseCoilSlashPose(now) {
+  if (now > coilSlashPoseReuseUntil) return false
+
+  var dx = snakeHead.x - coilSlashPoseReuseAnchorX
+  var dy = snakeHead.y - coilSlashPoseReuseAnchorY
+  var distance = Math.sqrt(dx * dx + dy * dy)
+
+  return distance < playerSegmentSpacing * 3
 }
 
 function isCoilSlashEntryActive() {
@@ -443,10 +516,15 @@ function getCoilSlashFeedDistance(now) {
 }
 
 function releaseCoilSlash() {
-  coilSlashChargeProgress = getCoilSlashChargeProgress(Date.now())
-  var releasedCharge = coilSlashEntryStartedAt
-    ? Math.max(coilSlashChargeProgress, coilSlashMinChargeToStrike)
-    : coilSlashChargeProgress
+  var now = Date.now()
+  coilSlashChargeProgress = getCoilSlashChargeProgress(now)
+  var releasedCharge = coilSlashChargeProgress
+
+  if (coilSlashChargeProgress > 0.72) {
+    rememberCoilSlashPose(now)
+  }
+
+  coilSlashSmoothSpineUntil = now + coilSlashSmoothSpineDuration
 
   setCoilSlashCharging(false)
   coilSlashChargeProgress = 0
@@ -478,10 +556,27 @@ function moveSnakeHeadForCoilSlashStrike() {
   if (isBerserkerActive()) strikeSpeed *= berserkerSpeedMultiplier
 
   if (!coilSlashStrikeReturning) {
+    var oldHeadX = snakeHead.x
+    var oldHeadY = snakeHead.y
+    var traveledBeforeStep = coilSlashStrikeDistanceTotal - coilSlashStrikeDistanceRemaining
     var outboundTravel = Math.min(coilSlashStrikeDistanceRemaining, strikeSpeed)
     snakeHead.x += Math.cos(headingAngle) * outboundTravel
     snakeHead.y += Math.sin(headingAngle) * outboundTravel
     coilSlashStrikeDistanceRemaining -= outboundTravel
+
+    var strikeHit = getCoilSlashFirstStrikeHit(oldHeadX, oldHeadY, snakeHead.x, snakeHead.y)
+    if (strikeHit) {
+      var hitTravel = traveledBeforeStep + outboundTravel * strikeHit.t
+      snakeHead.x = strikeHit.x
+      snakeHead.y = strikeHit.y
+      coilSlashStrikeDistanceRemaining = Math.max(0, coilSlashStrikeDistanceTotal - hitTravel)
+      coilSlashStrikeReturnDistanceRemaining = Math.max(
+        getCoilSlashHeadAnchorDistance(),
+        hitTravel
+      )
+      coilSlashStrikeReturning = true
+      return
+    }
 
     if (coilSlashStrikeDistanceRemaining <= 0) {
       coilSlashStrikeDistanceRemaining = 0
@@ -497,9 +592,17 @@ function moveSnakeHeadForCoilSlashStrike() {
   coilSlashStrikeReturnDistanceRemaining -= returnTravel
 
   if (coilSlashStrikeReturnDistanceRemaining <= 0) {
-    snakeHead.x = coilSlashAnchorX
-    snakeHead.y = coilSlashAnchorY
-    headingAngle = coilSlashAnchorAngle
+    var overshoot = -coilSlashStrikeReturnDistanceRemaining
+    if (overshoot > 0) {
+      snakeHead.x += Math.cos(headingAngle) * overshoot
+      snakeHead.y += Math.sin(headingAngle) * overshoot
+    }
+
+    coilSlashAnchorX = snakeHead.x
+    coilSlashAnchorY = snakeHead.y
+    coilSlashAnchorAngle = headingAngle
+    rememberCoilSlashPose(Date.now())
+    coilSlashSmoothSpineUntil = Date.now() + coilSlashSmoothSpineDuration
     coilSlashStrikeDistanceRemaining = 0
     coilSlashStrikeDistanceTotal = 0
     coilSlashStrikeReturnDistanceRemaining = 0
@@ -507,6 +610,71 @@ function moveSnakeHeadForCoilSlashStrike() {
     coilSlashChargeProgress = 0
     coilSlashStrikeReturning = false
     rebuildSnakeTrailFromCurrentSnakePose()
+  }
+}
+
+function getCoilSlashFirstStrikeHit(startX, startY, endX, endY) {
+  var pathDx = endX - startX
+  var pathDy = endY - startY
+  var pathLengthSquared = pathDx * pathDx + pathDy * pathDy
+  if (pathLengthSquared <= 0.001) return
+
+  var closestHit
+
+  for (var snakeIndex = 0; snakeIndex < badSnakes.length; snakeIndex++) {
+    var enemySnake = badSnakes[snakeIndex]
+    if (enemySnake.isBurning || enemySnake.enteringArena || enemySnake.leavingArena) continue
+
+    var hitRadius = 19 * renderScale * Math.max(1, Math.sqrt(enemySnake.collisionScale || 1))
+    var headHit = getPointHitOnCoilSlashPath(
+      enemySnake.head.x,
+      enemySnake.head.y,
+      hitRadius,
+      startX,
+      startY,
+      pathDx,
+      pathDy,
+      pathLengthSquared
+    )
+
+    if (headHit && (!closestHit || headHit.t < closestHit.t)) closestHit = headHit
+
+    for (var segmentIndex = 0; segmentIndex < enemySnake.segments.length; segmentIndex++) {
+      var segment = enemySnake.segments[segmentIndex]
+      var segmentHit = getPointHitOnCoilSlashPath(
+        segment.x,
+        segment.y,
+        hitRadius,
+        startX,
+        startY,
+        pathDx,
+        pathDy,
+        pathLengthSquared
+      )
+
+      if (segmentHit && (!closestHit || segmentHit.t < closestHit.t)) closestHit = segmentHit
+    }
+  }
+
+  return closestHit
+}
+
+function getPointHitOnCoilSlashPath(pointX, pointY, radius, startX, startY, pathDx, pathDy, pathLengthSquared) {
+  var pointDx = pointX - startX
+  var pointDy = pointY - startY
+  var t = (pointDx * pathDx + pointDy * pathDy) / pathLengthSquared
+  if (t < 0 || t > 1) return
+
+  var closestX = startX + pathDx * t
+  var closestY = startY + pathDy * t
+  var distanceX = pointX - closestX
+  var distanceY = pointY - closestY
+  if (distanceX * distanceX + distanceY * distanceY > radius * radius) return
+
+  return {
+    t: t,
+    x: closestX,
+    y: closestY,
   }
 }
 

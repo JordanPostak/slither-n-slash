@@ -895,6 +895,54 @@ function handleBadSnakeCuts(enemySnake, snakeTrapLoops) {
     return
   }
 
+  if (isCoilSlashCharging() || isCoilSlashStriking()) {
+    if (enemyHitIndex >= 0) {
+      var coilEnemyContactX = enemySnake.segments[enemyHitIndex].x
+      var coilEnemyContactY = enemySnake.segments[enemyHitIndex].y
+      var coilRecoveredSegments = removeBadSnakeSegments(enemySnake, getPlayerBiteSegments())
+      addPlayerSegments(coilRecoveredSegments)
+
+      if (badSnakes.indexOf(enemySnake) !== -1) {
+        pushBadSnakeAwayFromDominantPlayer(
+          enemySnake,
+          snakeHead.x,
+          snakeHead.y,
+          coilEnemyContactX,
+          coilEnemyContactY
+        )
+        enemySnake.cutCooldownUntil = now + snakeCutCooldown
+      }
+
+      if (coilRecoveredSegments) playGameSound('eat')
+      return
+    }
+
+    if (headsColliding) {
+      var coilHeadRecoveredSegments = removeBadSnakeSegments(enemySnake, getPlayerBiteSegments())
+      addPlayerSegments(coilHeadRecoveredSegments)
+
+      if (badSnakes.indexOf(enemySnake) !== -1) {
+        pushBadSnakeAwayFromDominantPlayer(
+          enemySnake,
+          snakeHead.x,
+          snakeHead.y,
+          enemySnake.head.x,
+          enemySnake.head.y
+        )
+        enemySnake.cutCooldownUntil = now + snakeCutCooldown
+      }
+
+      if (coilHeadRecoveredSegments) playGameSound('eat')
+      return
+    }
+
+    if (playerHitIndex >= 0) {
+      bounceBadSnakeOffPlayer(enemySnake, x[playerHitIndex], y[playerHitIndex])
+    }
+
+    return
+  }
+
   if (enemySnake.species === 'centipede' && getPlayerProgressLength() >= playerBiteUpgradeLength) {
     handleDominantPlayerCentipedeContact(
       enemySnake,
